@@ -125,6 +125,7 @@ impl HeaderValue {
             if prev_single_quote {
                 if *c == QUOTE_U8 {
                     s.push(*c as char);
+                    prev_single_quote = false;
                 } else {
                     break;
                 }
