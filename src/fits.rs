@@ -56,14 +56,14 @@ static QUOTE_U8: u8 = '\'' as u8;
 
 impl HeaderValue {
     fn new(value: &[u8]) -> Option<HeaderValue> {
-        if value[0] == QUOTE_U8 {
-            Some(HeaderValue::new_character_string(&value[1..]))
-        } else {
-            None
-        }
+        HeaderValue::new_character_string(value)
     }
 
-    fn new_character_string(subcard: &[u8]) -> HeaderValue {
+    fn new_character_string(subcard: &[u8]) -> Option<HeaderValue> {
+        if subcard[0] != QUOTE_U8 {
+            return None;
+        }
+        let subcard = &subcard[1..];
         let mut s = String::new();
         let mut prev_single_quote = false;
         let mut white_space_count = 0;
@@ -87,7 +87,8 @@ impl HeaderValue {
                 s.push(*c as char);
             }
         }
-        HeaderValue::CharacterString(s)
+        Some(HeaderValue::CharacterString(s))
+    }
     }
 }
 
