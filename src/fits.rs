@@ -180,4 +180,26 @@ mod tests {
             String::from("Malik Olivier Boussejra <malik@boussejra.com>"))));
         assert_eq!(value_comment.comment, Some(String::from("")));
     }
+
+    fn read_card_image_no_comment() {
+        let card = CardImage::from("AUTHOR  = ''");
+        let header_key_value = card.to_header_key_value().unwrap();
+        let value_comment = header_key_value.1.unwrap();
+        assert_eq!(value_comment.value, Some(HeaderValue::CharacterString(String::from(""))));
+        assert_eq!(value_comment.comment, None);
+    }
+
+    fn read_card_image_character_trailing_space() {
+        let card = CardImage::from("AUTHOR  = '  ab d  '");
+        let header_key_value = card.to_header_key_value().unwrap();
+        let value_comment = header_key_value.1.unwrap();
+        assert_eq!(value_comment.value, Some(HeaderValue::CharacterString(String::from("  ab d"))));
+    }
+
+    fn read_card_image_character_blank() {
+        let card = CardImage::from("AUTHOR  = '  '");
+        let header_key_value = card.to_header_key_value().unwrap();
+        let value_comment = header_key_value.1.unwrap();
+        assert_eq!(value_comment.value, Some(HeaderValue::CharacterString(String::from(" "))));
+    }
 }
