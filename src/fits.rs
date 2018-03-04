@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::{BufReader, Read, Error};
 use std::result::Result;
+use std::str::from_utf8;
 
 pub struct Fits {
     buf: BufReader<File>,
@@ -62,6 +63,9 @@ impl HeaderValue {
         .or_else(|| {
             HeaderValue::new_logical(value)
         })
+        .or_else(|| {
+            HeaderValue::new_integer(value)
+        })
     }
 
     fn new_character_string(subcard: &[u8]) -> Option<HeaderValue> {
@@ -112,6 +116,13 @@ impl HeaderValue {
             }
         }
         Some(HeaderValue::Logical(b))
+    }
+
+    fn new_integer(value: &[u8]) -> Option<HeaderValue> {
+        from_utf8(value).ok().and_then(|string| {
+            let trimmed = string.trim();
+            i64::from_str_radix(trimmed, 10).ok()
+        }).map(HeaderValue::IntegerNumber)
     }
 }
 
@@ -244,5 +255,13 @@ mod tests {
         let header_key_value = card.to_header_key_value().unwrap();
         let value_comment = header_key_value.1.unwrap();
         assert_eq!(value_comment.value, Some(HeaderValue::Logical(false)));
+    }
+
+    #[test]
+    fn read_card_image_character_integer() {
+        let card = CardImage::from("BITPIX  =                    8 /                     ");
+        let header_key_value = card.to_header_key_value().unwrap();
+        let value_comment = header_key_value.1.unwrap();
+        assert_eq!(value_comment.value, Some(HeaderValue::IntegerNumber(8)));
     }
 }
