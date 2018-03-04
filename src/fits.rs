@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{Read, Error};
+use std::io::{Read, Error, Seek, SeekFrom};
 use std::result::Result;
 use std::str::{FromStr, from_utf8};
 
@@ -76,7 +76,11 @@ impl Iterator for FitsIntoIter {
             };
             line_count += 1;
         }
-        Some(Hdu { header: header })
+        let hdu = Hdu { header: header };
+        hdu.data_byte_length().map(|len| {
+            self.file.seek(SeekFrom::Current(len as i64)).expect("Could not move cursor!");
+        });
+        Some(hdu)
     }
 }
 
@@ -365,5 +369,15 @@ mod tests {
         let mut iter = fits.into_iter();
         let primary_hdu = iter.next().unwrap();
         assert_eq!(primary_hdu.data_byte_length(), Some((32 / 8) * 10 * 2));
+    }
+
+    #[test]
+    fn iterate_over_hdu() {
+        let fits = Fits::open("test/testprog.fit").unwrap();
+        let mut iter = fits.into_iter();
+        let primary_hdu = iter.next().unwrap();
+        let hdu2 = iter.next();
+        let hdu3 = iter.next();
+        assert_eq!(hdu2, None);
     }
 }
