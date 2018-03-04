@@ -35,7 +35,6 @@ enum HeaderValue {
 type HeaderComment = String;
 
 struct CardImage([u8; 80]);
-struct HeaderRecord([CardImage; 36]);
 
 impl Fits {
     pub fn open(path: &str) -> Result<Fits, Error> {
@@ -187,16 +186,24 @@ impl Iterator for FitsIntoIter {
     type Item = Hdu;
     fn next(&mut self) -> Option<Self::Item> {
         let mut line = CardImage::new();
+        let mut line_count = 0;
         let mut header = Vec::new();
-        match self.buf.read_exact(&mut line.0) {
-            Ok(_)  => {
-                line.to_header_key_value().map(|v| {
-                    header.push(v);
-                    Hdu { header: header }
-                })
-            },
-            Err(_) => None,
+        let mut end = false;
+        while !end && (line_count % 36) != 0 {
+            match self.buf.read_exact(&mut line.0) {
+                Ok(_)  => {
+                    line.to_header_key_value().map(|(key, val)| {
+                        if key == "END" {
+                            end = true;
+                        }
+                        header.push((key, val));
+                    });
+                },
+                Err(_) => break,
+            };
+            line_count += 1;
         }
+        Some(Hdu { header: header })
     }
 }
 
