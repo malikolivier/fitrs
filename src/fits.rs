@@ -91,40 +91,33 @@ impl Hdu {
         None
     }
 
-    pub fn data_byte_length(&self) -> Option<usize> {
-        let bitpix = self.value("BITPIX");
-        let mut len = 0;
-        self.value("NAXIS").and_then(|naxis| {
-            match naxis {
-                &HeaderValue::IntegerNumber(n) => {
-                    for i in 1..(n+1) {
-                        let mut key = String::from("NAXIS");
-                        key.push_str(&i.to_string());
-                        match self.value(&key) {
-                            Some(naxis_i) => {
-                                match naxis_i {
-                                    &HeaderValue::IntegerNumber(k) => {
-                                        if i == 1 {
-                                            len += k as usize;
-                                        } else {
-                                            len *= k as usize;
-                                        }
-                                    },
-                                    _   => return None,
-                                }
-                            },
-                            None    => return None,
-                        }
-                    }
-                    bitpix.and_then(|bit| {
-                        match bit {
-                            &HeaderValue::IntegerNumber(b) => Some(len * (b as usize / 8)),
-                            _                              => None,
-                        }
-                    })
-                },
-                _                               => None,
+    fn value_as_integer_number(&self, key: &str) -> Option<i64> {
+        self.value(key).and_then(|val| {
+            match val {
+                &HeaderValue::IntegerNumber(n) => Some(n),
+                _                              => None,
             }
+        })
+    }
+
+    pub fn data_byte_length(&self) -> Option<usize> {
+        let mut len = 0;
+        self.value_as_integer_number("NAXIS").and_then(|naxis| {
+            for i in 1..(naxis + 1) {
+                let mut key = String::from("NAXIS");
+                key.push_str(&i.to_string());
+                match self.value_as_integer_number(&key) {
+                    None => return None,
+                    Some(k) => {
+                        if i == 1 {
+                            len += k as usize;
+                        } else {
+                            len *= k as usize;
+                        }
+                    },
+                }
+            }
+            self.value_as_integer_number("BITPIX").map(|bit| { len * (bit as usize / 8) })
         })
     }
 }
