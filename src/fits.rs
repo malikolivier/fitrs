@@ -1,14 +1,14 @@
 use std::fs::File;
-use std::io::{BufReader, Read, Error};
+use std::io::{Read, Error};
 use std::result::Result;
 use std::str::{FromStr, from_utf8};
 
 pub struct Fits {
-    buf: BufReader<File>,
+    file: File,
 }
 
 pub struct FitsIntoIter {
-    buf: BufReader<File>,
+    file: File,
 }
 
 pub struct Hdu {
@@ -39,8 +39,7 @@ struct CardImage([u8; 80]);
 impl Fits {
     pub fn open(path: &str) -> Result<Fits, Error> {
         File::open(path).map(|file| {
-            let buf_reader = BufReader::new(file);
-            Fits { buf: buf_reader }
+            Fits { file: file }
         })
     }
 }
@@ -49,7 +48,7 @@ impl IntoIterator for Fits {
     type Item = Hdu;
     type IntoIter = FitsIntoIter;
     fn into_iter(self) -> Self::IntoIter {
-        FitsIntoIter { buf: self.buf }
+        FitsIntoIter { file: self.file }
     }
 }
 
@@ -64,7 +63,7 @@ impl Iterator for FitsIntoIter {
             if (line_count % 36) == 0 && end {
                 break;
             }
-            match self.buf.read_exact(&mut line.0) {
+            match self.file.read_exact(&mut line.0) {
                 Ok(_)  => {
                     line.to_header_key_value().map(|(key, val)| {
                         if key == "END" {
