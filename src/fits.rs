@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io::{BufReader, Read, Error};
 use std::result::Result;
-use std::str::from_utf8;
+use std::str::{FromStr, from_utf8};
 
 pub struct Fits {
     buf: BufReader<File>,
@@ -66,6 +66,9 @@ impl HeaderValue {
         .or_else(|| {
             HeaderValue::new_integer(value)
         })
+        .or_else(|| {
+            HeaderValue::new_real_floating(value)
+        })
     }
 
     fn new_character_string(subcard: &[u8]) -> Option<HeaderValue> {
@@ -123,6 +126,13 @@ impl HeaderValue {
             let trimmed = string.trim();
             i64::from_str_radix(trimmed, 10).ok()
         }).map(HeaderValue::IntegerNumber)
+    }
+
+    fn new_real_floating(value: &[u8]) -> Option<HeaderValue> {
+        from_utf8(value).ok().and_then(|string| {
+            let trimmed = string.trim();
+            f64::from_str(trimmed).ok()
+        }).map(HeaderValue::RealFloatingNumber)
     }
 }
 
@@ -263,5 +273,21 @@ mod tests {
         let header_key_value = card.to_header_key_value().unwrap();
         let value_comment = header_key_value.1.unwrap();
         assert_eq!(value_comment.value, Some(HeaderValue::IntegerNumber(8)));
+    }
+
+    #[test]
+    fn read_card_image_character_real() {
+        let card = CardImage::from("EXPTIME =              13501.5 / Total exposure time (seconds)");
+        let header_key_value = card.to_header_key_value().unwrap();
+        let value_comment = header_key_value.1.unwrap();
+        assert_eq!(value_comment.value, Some(HeaderValue::RealFloatingNumber(13501.5)));
+    }
+
+    #[test]
+    fn read_card_image_character_real_exp() {
+        let card = CardImage::from("CDELT1  =      -1.666667E-03 /");
+        let header_key_value = card.to_header_key_value().unwrap();
+        let value_comment = header_key_value.1.unwrap();
+        assert_eq!(value_comment.value, Some(HeaderValue::RealFloatingNumber(-1.666667E-03)));
     }
 }
