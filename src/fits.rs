@@ -90,6 +90,43 @@ impl Hdu {
         }
         None
     }
+
+    pub fn data_byte_length(&self) -> Option<usize> {
+        let bitpix = self.value("BITPIX");
+        let mut len = 0;
+        self.value("NAXIS").and_then(|naxis| {
+            match naxis {
+                &HeaderValue::IntegerNumber(n) => {
+                    for i in 1..(n+1) {
+                        let mut key = String::from("NAXIS");
+                        key.push_str(&i.to_string());
+                        match self.value(&key) {
+                            Some(naxis_i) => {
+                                match naxis_i {
+                                    &HeaderValue::IntegerNumber(k) => {
+                                        if i == 1 {
+                                            len += k as usize;
+                                        } else {
+                                            len *= k as usize;
+                                        }
+                                    },
+                                    _   => return None,
+                                }
+                            },
+                            None    => return None,
+                        }
+                    }
+                    bitpix.and_then(|bit| {
+                        match bit {
+                            &HeaderValue::IntegerNumber(b) => Some(len * (b as usize / 8)),
+                            _                              => None,
+                        }
+                    })
+                },
+                _                               => None,
+            }
+        })
+    }
 }
 
 static EQUAL_U8: u8 = '=' as u8;
@@ -328,5 +365,13 @@ mod tests {
         assert_eq!(hdu.value("CARD3"), Some(&HeaderValue::CharacterString(String::from("1234567890123456789012345678901234567890123456789012345678901234''"))));
         assert_eq!(hdu.value("KY_IKYJ"), Some(&HeaderValue::IntegerNumber(51)));
         assert_eq!(hdu.value("KY_IKYE"), Some(&HeaderValue::RealFloatingNumber(-1.3346E+01)));
+    }
+
+    #[test]
+    fn compute_hdu_data_byte_length() {
+        let fits = Fits::open("test/testprog.fit").unwrap();
+        let mut iter = fits.into_iter();
+        let primary_hdu = iter.next().unwrap();
+        assert_eq!(primary_hdu.data_byte_length(), Some((32 / 8) * 10 * 2));
     }
 }
