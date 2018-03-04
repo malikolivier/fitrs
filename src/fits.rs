@@ -23,7 +23,7 @@ struct HeaderValueComment {
 }
 
 #[derive(PartialEq, Debug)]
-enum HeaderValue {
+pub enum HeaderValue {
     CharacterString(String),
     Logical(bool),
     IntegerNumber(i64),
@@ -43,9 +43,52 @@ impl Fits {
             Fits { buf: buf_reader }
         })
     }
+}
 
-    pub fn into_iter(self) -> FitsIntoIter {
+impl IntoIterator for Fits {
+    type Item = Hdu;
+    type IntoIter = FitsIntoIter;
+    fn into_iter(self) -> Self::IntoIter {
         FitsIntoIter { buf: self.buf }
+    }
+}
+
+impl Iterator for FitsIntoIter {
+    type Item = Hdu;
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut line = CardImage::new();
+        let mut line_count = 0;
+        let mut header = Vec::new();
+        let mut end = false;
+        while !end {
+            if (line_count % 36) == 0 && end {
+                break;
+            }
+            match self.buf.read_exact(&mut line.0) {
+                Ok(_)  => {
+                    line.to_header_key_value().map(|(key, val)| {
+                        if key == "END" {
+                            end = true;
+                        }
+                        header.push((key, val));
+                    });
+                },
+                Err(_) => break,
+            };
+            line_count += 1;
+        }
+        Some(Hdu { header: header })
+    }
+}
+
+impl Hdu {
+    pub fn value(&self, key: &str) -> Option<&HeaderValue> {
+        for line in self.header.iter() {
+            if line.0 == key {
+                return line.1.as_ref().and_then(|value_comment| { value_comment.value.as_ref() });
+            }
+        }
+        None
     }
 }
 
@@ -182,35 +225,10 @@ impl CardImage {
     }
 }
 
-impl Iterator for FitsIntoIter {
-    type Item = Hdu;
-    fn next(&mut self) -> Option<Self::Item> {
-        let mut line = CardImage::new();
-        let mut line_count = 0;
-        let mut header = Vec::new();
-        let mut end = false;
-        while !end && (line_count % 36) != 0 {
-            match self.buf.read_exact(&mut line.0) {
-                Ok(_)  => {
-                    line.to_header_key_value().map(|(key, val)| {
-                        if key == "END" {
-                            end = true;
-                        }
-                        header.push((key, val));
-                    });
-                },
-                Err(_) => break,
-            };
-            line_count += 1;
-        }
-        Some(Hdu { header: header })
-    }
-}
-
 
 #[cfg(test)]
 mod tests {
-    use super::{CardImage, HeaderValue};
+    use super::{Fits, CardImage, HeaderValue};
 
     impl CardImage {
         fn from(s: &str) -> CardImage {
@@ -296,5 +314,18 @@ mod tests {
         let header_key_value = card.to_header_key_value().unwrap();
         let value_comment = header_key_value.1.unwrap();
         assert_eq!(value_comment.value, Some(HeaderValue::RealFloatingNumber(-1.666667E-03)));
+    }
+
+    #[test]
+    fn read_first_hdu() {
+        let fits = Fits::open("test/testprog.fit").unwrap();
+        let mut iter = fits.into_iter();
+        let hdu = iter.next().unwrap();
+        assert_eq!(hdu.value("SIMPLE"), Some(&HeaderValue::Logical(true)));
+        assert_eq!(hdu.value("CARD1"), Some(&HeaderValue::CharacterString(String::from("12345678901234567890123456789012345678901234567890123456789012345678"))));
+        assert_eq!(hdu.value("CARD2"), Some(&HeaderValue::CharacterString(String::from("1234567890123456789012345678901234567890123456789012345678901234'67"))));
+        assert_eq!(hdu.value("CARD3"), Some(&HeaderValue::CharacterString(String::from("1234567890123456789012345678901234567890123456789012345678901234''"))));
+        assert_eq!(hdu.value("KY_IKYJ"), Some(&HeaderValue::IntegerNumber(51)));
+        assert_eq!(hdu.value("KY_IKYE"), Some(&HeaderValue::RealFloatingNumber(-1.3346E+01)));
     }
 }
