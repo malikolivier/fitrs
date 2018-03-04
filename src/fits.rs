@@ -182,6 +182,7 @@ mod tests {
         assert_eq!(value_comment.comment, Some(String::from("")));
     }
 
+    #[test]
     fn read_card_image_no_comment() {
         let card = CardImage::from("AUTHOR  = ''");
         let header_key_value = card.to_header_key_value().unwrap();
@@ -190,6 +191,7 @@ mod tests {
         assert_eq!(value_comment.comment, None);
     }
 
+    #[test]
     fn read_card_image_character_trailing_space() {
         let card = CardImage::from("AUTHOR  = '  ab d  '");
         let header_key_value = card.to_header_key_value().unwrap();
@@ -197,6 +199,7 @@ mod tests {
         assert_eq!(value_comment.value, Some(HeaderValue::CharacterString(String::from("  ab d"))));
     }
 
+    #[test]
     fn read_card_image_character_blank() {
         let card = CardImage::from("AUTHOR  = '  '");
         let header_key_value = card.to_header_key_value().unwrap();
