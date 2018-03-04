@@ -53,10 +53,15 @@ static EQUAL_U8: u8 = '=' as u8;
 static SPACE_U8: u8 = ' ' as u8;
 static SLASH_U8: u8 = '/' as u8;
 static QUOTE_U8: u8 = '\'' as u8;
+static T_U8: u8 = 'T' as u8;
+static F_U8: u8 = 'F' as u8;
 
 impl HeaderValue {
     fn new(value: &[u8]) -> Option<HeaderValue> {
         HeaderValue::new_character_string(value)
+        .or_else(|| {
+            HeaderValue::new_logical(value)
+        })
     }
 
     fn new_character_string(subcard: &[u8]) -> Option<HeaderValue> {
@@ -89,6 +94,24 @@ impl HeaderValue {
         }
         Some(HeaderValue::CharacterString(s))
     }
+
+    fn new_logical(value: &[u8]) -> Option<HeaderValue> {
+        let mut b = false;
+        let logical_constant_column = 30 - 10 - 1;
+        for (i, c) in value.iter().enumerate() {
+            if i == logical_constant_column {
+                if *c == T_U8 {
+                    b = true;
+                } else if *c == F_U8 {
+                    b = false;
+                } else {
+                    return None;
+                }
+            } else if *c != SPACE_U8 {
+                return None;
+            }
+        }
+        Some(HeaderValue::Logical(b))
     }
 }
 
@@ -205,5 +228,21 @@ mod tests {
         let header_key_value = card.to_header_key_value().unwrap();
         let value_comment = header_key_value.1.unwrap();
         assert_eq!(value_comment.value, Some(HeaderValue::CharacterString(String::from(" "))));
+    }
+
+    #[test]
+    fn read_card_image_character_logical_true() {
+        let card = CardImage::from("SIMPLE  =                    T /                     ");
+        let header_key_value = card.to_header_key_value().unwrap();
+        let value_comment = header_key_value.1.unwrap();
+        assert_eq!(value_comment.value, Some(HeaderValue::Logical(true)));
+    }
+
+    #[test]
+    fn read_card_image_character_logical_false() {
+        let card = CardImage::from("SIMPLE  =                    F /                     ");
+        let header_key_value = card.to_header_key_value().unwrap();
+        let value_comment = header_key_value.1.unwrap();
+        assert_eq!(value_comment.value, Some(HeaderValue::Logical(false)));
     }
 }
