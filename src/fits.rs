@@ -36,13 +36,13 @@ pub enum FitsData {
 
 #[derive(Debug)]
 pub struct FitsDataArray<T> {
-    naxis: Vec<usize>,
+    shape: Vec<usize>,
     data: Vec<T>,
 }
 
 impl<T> FitsDataArray<T> {
-    fn new(naxis: &[usize]) -> Self {
-        Self { naxis: Vec::from(naxis), data: Vec::new() }
+    fn new(shape: &[usize]) -> Self {
+        Self { shape: Vec::from(shape), data: Vec::new() }
     }
 }
 
