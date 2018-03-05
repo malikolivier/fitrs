@@ -251,7 +251,22 @@ impl Hdu {
     }
 
     fn read_data_i16_force(&mut self) -> &FitsData {
-        unimplemented!()
+        let naxis = self.naxis().expect("Get NAXIS");
+        let blank = self.value_as_integer_number("BLANK");
+        let length = naxis.iter().fold(1, |acc, x| acc * x);
+        let mut array = FitsDataArray::new(&naxis);
+        let mut buf;
+        self.set_position();
+        for i in 0..length {
+            buf = self.file.borrow_mut().read_i16::<BigEndian>().expect("Read array") as i32;
+            if blank.is_some() && buf == blank.unwrap() {
+                array.data.push(None);
+            } else {
+                array.data.push(Some(buf));
+            }
+        }
+        self.data = Some(FitsData::IntegersI32(array));
+        self.data.as_ref().unwrap()
     }
 
     fn read_data_i32_force(&mut self) -> &FitsData {
