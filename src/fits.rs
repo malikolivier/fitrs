@@ -149,24 +149,32 @@ impl Hdu {
         })
     }
 
-    fn data_length(&self) -> Option<usize> {
+    fn naxis(&self) -> Option<Vec<usize>> {
         self.value_as_integer_number("NAXIS").and_then(|naxis| {
-            let mut len = 0;
+            let mut vec = Vec::new();
             for i in 1..(naxis + 1) {
                 let mut key = String::from("NAXIS");
                 key.push_str(&i.to_string());
                 match self.value_as_integer_number(&key) {
                     None => return None,
-                    Some(k) => {
-                        if i == 1 {
-                            len += k as usize;
-                        } else {
-                            len *= k as usize;
-                        }
-                    },
+                    Some(k) => vec.push(k as usize),
                 }
             }
-            Some(len)
+            Some(vec)
+        })
+    }
+
+    fn data_length(&self) -> Option<usize> {
+        self.naxis().map(|naxis| {
+            let mut len = 0;
+            for (i, k) in naxis.iter().enumerate() {
+                if i == 0 {
+                    len += *k as usize;
+                } else {
+                    len *= *k as usize;
+                }
+            }
+            len
         })
     }
 
