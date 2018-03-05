@@ -30,7 +30,6 @@ pub enum FitsData {
     Characters(FitsDataArray<char>),
     IntegersI32(FitsDataArray<Option<i32>>),
     IntegersU32(FitsDataArray<Option<u32>>),
-    FloatingPoint32(FitsDataArray<f32>),
     FloatingPoint64(FitsDataArray<f64>),
 }
 
@@ -289,11 +288,31 @@ impl Hdu {
     }
 
     fn read_data_f32_force(&mut self) -> &FitsData {
-        unimplemented!()
+        let naxis = self.naxis().expect("Get NAXIS");
+        let length = naxis.iter().fold(1, |acc, x| acc * x);
+        let mut array = FitsDataArray::new(&naxis);
+        let mut buf;
+        self.set_position();
+        for i in 0..length {
+            buf = self.file.borrow_mut().read_f32::<BigEndian>().expect("Read array") as f64;
+            array.data.push(buf);
+        }
+        self.data = Some(FitsData::FloatingPoint64(array));
+        self.data.as_ref().unwrap()
     }
 
     fn read_data_f64_force(&mut self) -> &FitsData {
-        unimplemented!()
+        let naxis = self.naxis().expect("Get NAXIS");
+        let length = naxis.iter().fold(1, |acc, x| acc * x);
+        let mut array = FitsDataArray::new(&naxis);
+        let mut buf;
+        self.set_position();
+        for i in 0..length {
+            buf = self.file.borrow_mut().read_f64::<BigEndian>().expect("Read array");
+            array.data.push(buf);
+        }
+        self.data = Some(FitsData::FloatingPoint64(array));
+        self.data.as_ref().unwrap()
     }
 }
 
