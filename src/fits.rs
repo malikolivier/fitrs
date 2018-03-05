@@ -267,7 +267,7 @@ impl Hdu {
         where F: Fn(&mut File) -> T
     {
         let naxis = self.naxis().expect("Get NAXIS");
-        let length = naxis.iter().fold(1, |acc, x| acc * x);
+        let length = naxis.iter().product();
         let mut array = FitsDataArray::new(&naxis);
         for i in 0..length {
             array.data.push(read(&mut *self.file.borrow_mut()))
