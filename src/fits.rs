@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::{Read, Error, Seek, SeekFrom};
+use std::ops::{Index, IndexMut};
 use std::result::Result;
 use std::str::{FromStr, from_utf8};
 use std::rc::Rc;
@@ -94,6 +95,29 @@ impl Fits {
 
     pub fn iter_mut(&mut self) -> FitsIterMut {
         FitsIterMut { fits: self, position: 0, count: 0 }
+    }
+}
+
+impl Index<usize> for Fits {
+    type Output = Hdu;
+    fn index(&self, index: usize) -> &Self::Output {
+        for (i, hdu) in self.iter().enumerate() {
+            if i == index {
+                return hdu;
+            }
+        }
+        panic!("Index out of range");
+    }
+}
+
+impl IndexMut<usize> for Fits {
+    fn index_mut(&mut self, index: usize) -> &mut Hdu {
+        for (i, hdu) in self.iter_mut().enumerate() {
+            if i == index {
+                return hdu;
+            }
+        }
+        panic!("Index out of range");
     }
 }
 
@@ -747,5 +771,13 @@ mod tests {
             assert_eq!(hdu3.header[0].0, "XTENSION");
             assert_eq!(hdu3.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("IMAGE")));
         }
+    }
+
+    #[test]
+    fn index_over_fits() {
+        let fits = Fits::open("test/testprog.fit").unwrap();
+        let hdu2 = &fits[1];
+        assert_eq!(hdu2.header[0].0, "XTENSION");
+        assert_eq!(hdu2.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("BINTABLE")));
     }
 }
