@@ -235,7 +235,19 @@ impl Hdu {
     }
 
     fn read_data_u8_force(&mut self) -> &FitsData {
-        unimplemented!()
+        let naxis = self.naxis().expect("Get NAXIS");
+        let length = naxis.iter().fold(1, |acc, x| acc * x);
+        let mut array = FitsDataArray::new(&naxis);
+        let mut buf = [0u8; 1];
+        for i in 0..length {
+            self.file.borrow_mut().read_exact(&mut buf).expect("Read array");
+            for a in buf.iter() {
+                array.data.push(*a as char);
+            }
+
+        }
+        self.data = Some(FitsData::Characters(array));
+        self.data.as_ref().unwrap()
     }
 
     fn read_data_i16_force(&mut self) -> &FitsData {
@@ -551,6 +563,28 @@ mod tests {
                                             None, Some(17), Some(18), Some(19), None]);
             }
             _ => panic!("Should be IntegersI32!")
+        }
+    }
+
+    #[test]
+    fn read_second_hdu_array() {
+        // TODO TableHDU are not handled yet
+        let fits = Fits::open("test/testprog.fit").unwrap();
+        let mut iter = fits.into_iter();
+        iter.next();
+        let mut table_hdu_1 = iter.next().unwrap();
+        let data = table_hdu_1.read_data();
+        match data {
+            &FitsData::Characters(ref array) => {
+                assert_eq!(array.shape, vec![61, 20]);
+                assert_eq!(&array.data[..30], &vec!['\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}',
+                                                    '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}',
+                                                    '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}',
+                                                    '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{80}',
+                                                    '\u{0}', 'ÿ', 'ÿ', 'ÿ', 'ÿ',
+                                                    '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}'][..]);
+            }
+            _ => panic!("Should be Characters!")
         }
     }
 }
