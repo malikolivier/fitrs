@@ -230,7 +230,7 @@ impl<'f> Iterator for FitsIter<'f> {
     fn next(&mut self) -> Option<&'f Hdu> {
         if self.count < self.fits.hdus.len() {
             self.count += 1;
-            return Some(&self.fits.hdus[self.count]);
+            return Some(&self.fits.hdus[self.count - 1]);
         }
         self.read_next_hdu().map(|hdu| {
             self.count += 1;
@@ -245,8 +245,8 @@ impl<'f> Iterator for FitsIterMut<'f> {
     type Item = &'f mut Hdu;
     fn next(&mut self) -> Option<&'f mut Hdu> {
         if self.count < self.fits.hdus.len() {
-            self.count += 1;
             let mut hdu = self.fits.hdus.get_mut(self.count).unwrap();
+            self.count += 1;
             let raw = hdu as *mut Hdu;
             unsafe { return Some(&mut *raw); }
         }
@@ -720,5 +720,32 @@ mod tests {
         let hdu3 = iter.next().unwrap();
         assert_eq!(hdu3.header[0].0, "XTENSION");
         assert_eq!(hdu3.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("IMAGE")));
+    }
+
+    #[test]
+    fn iterate_over_hdu_mut_twice() {
+        let mut fits = Fits::open("test/testprog.fit").unwrap();
+        {
+            let mut iter = fits.iter_mut();
+            let primary_hdu = iter.next().unwrap();
+            assert_eq!(primary_hdu.header[0].0, "SIMPLE");
+            let hdu2 = iter.next().unwrap();
+            assert_eq!(hdu2.header[0].0, "XTENSION");
+            assert_eq!(hdu2.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("BINTABLE")));
+            let hdu3 = iter.next().unwrap();
+            assert_eq!(hdu3.header[0].0, "XTENSION");
+            assert_eq!(hdu3.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("IMAGE")));
+        }
+        {
+            let mut iter = fits.iter_mut();
+            let primary_hdu = iter.next().unwrap();
+            assert_eq!(primary_hdu.header[0].0, "SIMPLE");
+            let hdu2 = iter.next().unwrap();
+            assert_eq!(hdu2.header[0].0, "XTENSION");
+            assert_eq!(hdu2.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("BINTABLE")));
+            let hdu3 = iter.next().unwrap();
+            assert_eq!(hdu3.header[0].0, "XTENSION");
+            assert_eq!(hdu3.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("IMAGE")));
+        }
     }
 }
