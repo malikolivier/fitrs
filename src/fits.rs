@@ -40,6 +40,12 @@ pub struct FitsDataArray<T> {
     data: Vec<T>,
 }
 
+impl<T> FitsDataArray<T> {
+    fn new(naxis: &[usize]) -> Self {
+        Self { naxis: Vec::from(naxis), data: Vec::new() }
+    }
+}
+
 type HeaderKeyWord = String;
 
 #[derive(Debug)]
@@ -85,8 +91,19 @@ impl FitsIntoIter {
     }
 
     fn set_position(&mut self) {
-        let current_position = self.position;
-        self.file.borrow_mut().seek(SeekFrom::Start(current_position))
+        self.file.borrow_mut().seek(SeekFrom::Start(self.position))
+                              .expect("Could not set position!");
+    }
+}
+
+impl Hdu {
+    fn tell(&mut self) -> u64 {
+        self.file.borrow_mut().seek(SeekFrom::Current(0))
+                              .expect("Could not get cursor position!")
+    }
+
+    fn set_position(&mut self) {
+        self.file.borrow_mut().seek(SeekFrom::Start(self.data_start))
                               .expect("Could not set position!");
     }
 }
@@ -187,6 +204,65 @@ impl Hdu {
                 len * (bit as usize / 8)
             })
         })
+    }
+
+    pub fn is_data_cached(&self) -> bool {
+        self.data.is_some()
+    }
+
+    pub fn data(&self) -> Option<&FitsData> {
+        self.data.as_ref()
+    }
+
+    pub fn read_data(&mut self) -> &FitsData {
+        if self.is_data_cached() {
+            self.data.as_ref().unwrap()
+        } else {
+            self.read_data_force()
+        }
+    }
+
+    fn read_data_force(&mut self) -> &FitsData {
+        let bitpix = self.value_as_integer_number("BITPIX").expect("BITPIX is present");
+        match bitpix {
+            8   => self.read_data_u8_force(),
+            16  => self.read_data_i16_force(),
+            32  => self.read_data_i32_force(),
+            -32 => self.read_data_f32_force(),
+            -64 => self.read_data_f64_force(),
+            _   => panic!("Unexpected value for BITPIX")
+        }
+    }
+
+    fn read_data_u8_force(&mut self) -> &FitsData {
+        unimplemented!()
+    }
+
+    fn read_data_i16_force(&mut self) -> &FitsData {
+        unimplemented!()
+    }
+
+    fn read_data_i32_force(&mut self) -> &FitsData {
+        let naxis = self.naxis().expect("Get NAXIS");
+        let length = naxis.iter().fold(1, |acc, x| acc * x);
+        let array: FitsDataArray<i32> = FitsDataArray::new(&naxis);
+        let mut buf = [0u8; 4];
+        self.set_position();
+        for i in 0..length {
+            self.file.borrow_mut().read_exact(&mut buf).expect("Read array");
+            println!("{:x};{:x};{:x};{:x}", buf[0], buf[1], buf[2], buf[3]);
+            // TODO
+        }
+        self.data = Some(FitsData::IntegersI32(array));
+        self.data.as_ref().unwrap()
+    }
+
+    fn read_data_f32_force(&mut self) -> &FitsData {
+        unimplemented!()
+    }
+
+    fn read_data_f64_force(&mut self) -> &FitsData {
+        unimplemented!()
     }
 }
 
