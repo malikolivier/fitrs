@@ -130,45 +130,14 @@ impl<'f> MovableCursor for FitsIter<'f> {
 impl Iterator for FitsIntoIter {
     type Item = Hdu;
     fn next(&mut self) -> Option<Self::Item> {
-        self.set_position();
-        let mut line = CardImage::new();
-        let mut line_count = 0;
-        let mut header = Vec::new();
-        let mut end = false;
-        while (line_count % 36) != 0 || !end {
-            match self.file.borrow_mut().read_exact(&mut line.0) {
-                Ok(_)  => {
-                    line.to_header_key_value().map(|(key, val)| {
-                        if key == "END" {
-                            end = true;
-                        }
-                        header.push((key, val));
-                    });
-                },
-                Err(_) => return None,
-            };
-            line_count += 1;
-        }
-        let data_start_position = self.tell();
-        let hdu = Hdu {
-            header: header,
-            data_start: data_start_position,
-            file: self.file.clone(),
-            data: None,
-        };
-        hdu.data_byte_length().map(|len| {
-            let mut next_position = data_start_position + (len as u64);
-            /* Go to end of record */
-            while (next_position % (36 * 80)) != 0 {
-                next_position += 1;
-            }
-            self.position = next_position;
-        });
-        Some(hdu)
+        self.read_next_hdu()
     }
 }
 
-impl<'f> FitsIter<'f> {
+trait IterableOverHdu: MovableCursor {
+    fn file_rc(&self) -> Rc<RefCell<File>>;
+    fn set_next_position(&mut self, position: u64);
+
     fn read_next_hdu(&mut self) -> Option<Hdu> {
         self.set_position();
         let mut line = CardImage::new();
@@ -176,7 +145,7 @@ impl<'f> FitsIter<'f> {
         let mut header = Vec::new();
         let mut end = false;
         while (line_count % 36) != 0 || !end {
-            match self.fits.file.borrow_mut().read_exact(&mut line.0) {
+            match self.file().read_exact(&mut line.0) {
                 Ok(_)  => {
                     line.to_header_key_value().map(|(key, val)| {
                         if key == "END" {
@@ -193,7 +162,7 @@ impl<'f> FitsIter<'f> {
         let hdu = Hdu {
             header: header,
             data_start: data_start_position,
-            file: self.fits.file.clone(),
+            file: self.file_rc().clone(),
             data: None,
         };
         hdu.data_byte_length().map(|len| {
@@ -202,9 +171,27 @@ impl<'f> FitsIter<'f> {
             while (next_position % (36 * 80)) != 0 {
                 next_position += 1;
             }
-            self.position = next_position;
+            self.set_next_position(next_position);
         });
         Some(hdu)
+    }
+}
+
+impl<'f> IterableOverHdu for FitsIter<'f> {
+    fn file_rc(&self) -> Rc<RefCell<File>> {
+        self.fits.file.clone()
+    }
+    fn set_next_position(&mut self, position: u64) {
+        self.position = position;
+    }
+}
+
+impl IterableOverHdu for FitsIntoIter {
+    fn file_rc(&self) -> Rc<RefCell<File>> {
+        self.file.clone()
+    }
+    fn set_next_position(&mut self, position: u64) {
+        self.position = position;
     }
 }
 
