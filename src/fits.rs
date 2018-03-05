@@ -166,7 +166,10 @@ impl Hdu {
                     },
                 }
             }
-            self.value_as_integer_number("BITPIX").map(|bit| { len * (bit as usize / 8) })
+            self.value_as_integer_number("BITPIX").map(|bit| {
+                let bit = if bit < 0 { -bit } else { bit };
+                len * (bit as usize / 8)
+            })
         })
     }
 }
