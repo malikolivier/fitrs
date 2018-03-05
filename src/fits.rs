@@ -223,96 +223,56 @@ impl Hdu {
 
     fn read_data_force(&mut self) -> &FitsData {
         let bitpix = self.value_as_integer_number("BITPIX").expect("BITPIX is present");
-        match bitpix {
-            8   => self.read_data_u8_force(),
-            16  => self.read_data_i16_force(),
-            32  => self.read_data_i32_force(),
-            -32 => self.read_data_f32_force(),
-            -64 => self.read_data_f64_force(),
+        let data = match bitpix {
+            8   => FitsData::Characters(self.inner_read_data_force(|file| {
+                    let mut buf = [0u8; 1];
+                    file.read_exact(&mut buf).expect("Read array");
+                    buf[0] as char
+                })),
+            16  => {
+                let blank = self.value_as_integer_number("BLANK");
+                FitsData::IntegersI32(self.inner_read_data_force(|file| {
+                    let buf = file.read_i16::<BigEndian>().expect("Read array") as i32;
+                    if blank.is_some() && buf == blank.unwrap() {
+                        None
+                    } else {
+                        Some(buf)
+                    }
+                }))
+            },
+            32  => {
+                let blank = self.value_as_integer_number("BLANK");
+                FitsData::IntegersI32(self.inner_read_data_force(|file| {
+                    let buf = file.read_i32::<BigEndian>().expect("Read array");
+                    if blank.is_some() && buf == blank.unwrap() {
+                        None
+                    } else {
+                        Some(buf)
+                    }
+                }))
+            },
+            -32 => FitsData::FloatingPoint64(self.inner_read_data_force(|file| {
+                    file.read_f32::<BigEndian>().expect("Read array") as f64
+                })),
+            -64 => FitsData::FloatingPoint64(self.inner_read_data_force(|file| {
+                    file.read_f64::<BigEndian>().expect("Read array")
+                })),
             _   => panic!("Unexpected value for BITPIX")
-        }
-    }
-
-    fn read_data_u8_force(&mut self) -> &FitsData {
-        let naxis = self.naxis().expect("Get NAXIS");
-        let length = naxis.iter().fold(1, |acc, x| acc * x);
-        let mut array = FitsDataArray::new(&naxis);
-        let mut buf = [0u8; 1];
-        for i in 0..length {
-            self.file.borrow_mut().read_exact(&mut buf).expect("Read array");
-            for a in buf.iter() {
-                array.data.push(*a as char);
-            }
-
-        }
-        self.data = Some(FitsData::Characters(array));
+        };
+        self.data = Some(data);
         self.data.as_ref().unwrap()
     }
 
-    fn read_data_i16_force(&mut self) -> &FitsData {
-        let naxis = self.naxis().expect("Get NAXIS");
-        let blank = self.value_as_integer_number("BLANK");
-        let length = naxis.iter().fold(1, |acc, x| acc * x);
-        let mut array = FitsDataArray::new(&naxis);
-        let mut buf;
-        self.set_position();
-        for i in 0..length {
-            buf = self.file.borrow_mut().read_i16::<BigEndian>().expect("Read array") as i32;
-            if blank.is_some() && buf == blank.unwrap() {
-                array.data.push(None);
-            } else {
-                array.data.push(Some(buf));
-            }
-        }
-        self.data = Some(FitsData::IntegersI32(array));
-        self.data.as_ref().unwrap()
-    }
-
-    fn read_data_i32_force(&mut self) -> &FitsData {
-        let naxis = self.naxis().expect("Get NAXIS");
-        let blank = self.value_as_integer_number("BLANK");
-        let length = naxis.iter().fold(1, |acc, x| acc * x);
-        let mut array = FitsDataArray::new(&naxis);
-        let mut buf;
-        self.set_position();
-        for i in 0..length {
-            buf = self.file.borrow_mut().read_i32::<BigEndian>().expect("Read array");
-            if blank.is_some() && buf == blank.unwrap() {
-                array.data.push(None);
-            } else {
-                array.data.push(Some(buf));
-            }
-        }
-        self.data = Some(FitsData::IntegersI32(array));
-        self.data.as_ref().unwrap()
-    }
-
-    fn read_data_f32_force(&mut self) -> &FitsData {
+    fn inner_read_data_force<F, T>(&mut self, mut read: F) -> FitsDataArray<T>
+        where F: Fn(&mut File) -> T
+    {
         let naxis = self.naxis().expect("Get NAXIS");
         let length = naxis.iter().fold(1, |acc, x| acc * x);
         let mut array = FitsDataArray::new(&naxis);
-        let mut buf;
-        self.set_position();
         for i in 0..length {
-            buf = self.file.borrow_mut().read_f32::<BigEndian>().expect("Read array") as f64;
-            array.data.push(buf);
+            array.data.push(read(&mut *self.file.borrow_mut()))
         }
-        self.data = Some(FitsData::FloatingPoint64(array));
-        self.data.as_ref().unwrap()
-    }
-
-    fn read_data_f64_force(&mut self) -> &FitsData {
-        let naxis = self.naxis().expect("Get NAXIS");
-        let length = naxis.iter().fold(1, |acc, x| acc * x);
-        let mut array = FitsDataArray::new(&naxis);
-        let mut buf;
-        self.set_position();
-        for i in 0..length {
-            buf = self.file.borrow_mut().read_f64::<BigEndian>().expect("Read array");
-            array.data.push(buf);
-        }
-        self.data = Some(FitsData::FloatingPoint64(array));
-        self.data.as_ref().unwrap()
+        array
     }
 }
 
