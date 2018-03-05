@@ -5,6 +5,9 @@ use std::str::{FromStr, from_utf8};
 use std::rc::Rc;
 use std::cell::RefCell;
 
+use byteorder::{BigEndian, ReadBytesExt};
+
+
 pub struct Fits {
     file: Rc<RefCell<File>>,
 }
@@ -241,14 +244,18 @@ impl Hdu {
 
     fn read_data_i32_force(&mut self) -> &FitsData {
         let naxis = self.naxis().expect("Get NAXIS");
+        let blank = self.value_as_integer_number("BLANK");
         let length = naxis.iter().fold(1, |acc, x| acc * x);
-        let array: FitsDataArray<i32> = FitsDataArray::new(&naxis);
-        let mut buf = [0u8; 4];
+        let mut array = FitsDataArray::new(&naxis);
+        let mut buf;
         self.set_position();
         for i in 0..length {
-            self.file.borrow_mut().read_exact(&mut buf).expect("Read array");
-            println!("{:x};{:x};{:x};{:x}", buf[0], buf[1], buf[2], buf[3]);
-            // TODO
+            buf = self.file.borrow_mut().read_i32::<BigEndian>().expect("Read array");
+            if blank.is_some() && buf == blank.unwrap() {
+                array.data.push(None);
+            } else {
+                array.data.push(Some(buf));
+            }
         }
         self.data = Some(FitsData::IntegersI32(array));
         self.data.as_ref().unwrap()
@@ -400,7 +407,7 @@ impl CardImage {
 
 #[cfg(test)]
 mod tests {
-    use super::{Fits, CardImage, HeaderValue};
+    use super::{Fits, FitsData, CardImage, HeaderValue};
 
     impl CardImage {
         fn from(s: &str) -> CardImage {
@@ -527,5 +534,23 @@ mod tests {
     fn iterate_over_all_hdus() {
         let fits = Fits::open("test/testprog.fit").unwrap();
         assert_eq!(fits.into_iter().count(), 8);
+    }
+
+    #[test]
+    fn make_primary_hdu_array() {
+        let fits = Fits::open("test/testprog.fit").unwrap();
+        let mut iter = fits.into_iter();
+        let mut primary_hdu = iter.next().unwrap();
+        let data = primary_hdu.read_data();
+        match data {
+            &FitsData::IntegersI32(ref array) => {
+                assert_eq!(array.shape, vec![10, 2]);
+                assert_eq!(array.data, vec![None, Some(2), Some(3), None, Some(5),
+                                            Some(6), Some(7), None, Some(9), Some(10),
+                                            Some(11), None, Some(13), Some(14), Some(15),
+                                            None, Some(17), Some(18), Some(19), None]);
+            }
+            _ => panic!("Should be IntegersI32!")
+        }
     }
 }
