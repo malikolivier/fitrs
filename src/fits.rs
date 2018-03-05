@@ -121,6 +121,19 @@ impl IndexMut<usize> for Fits {
     }
 }
 
+impl<'s> Index<&'s str> for Fits {
+    type Output = Hdu;
+    fn index(&self, index: &str) -> &Self::Output {
+        let value = Some(HeaderValue::CharacterString(String::from(index)));
+        for hdu in self.iter() {
+            if hdu.value("EXTNAME") == value.as_ref() {
+                return hdu;
+            }
+        }
+        panic!("Extension not found!");
+    }
+}
+
 impl IntoIterator for Fits {
     type Item = Hdu;
     type IntoIter = FitsIntoIter;
@@ -779,5 +792,27 @@ mod tests {
         let hdu2 = &fits[1];
         assert_eq!(hdu2.header[0].0, "XTENSION");
         assert_eq!(hdu2.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("BINTABLE")));
+    }
+
+    #[test]
+    #[should_panic]
+    fn index_overflow_over_fits() {
+        let fits = Fits::open("test/testprog.fit").unwrap();
+        let hdu2 = &fits[10];
+    }
+
+    #[test]
+    fn index_with_string_over_fits() {
+        let fits = Fits::open("test/testprog.fit").unwrap();
+        let hdu2 = &fits["Test-ASCII"];
+        assert_eq!(hdu2.header[0].0, "XTENSION");
+        assert_eq!(hdu2.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("TABLE")));
+    }
+
+    #[test]
+    #[should_panic]
+    fn index_with_string_not_found_over_fits() {
+        let fits = Fits::open("test/testprog.fit").unwrap();
+        let hdu2 = &fits["FOOBAR"];
     }
 }
