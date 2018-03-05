@@ -17,6 +17,13 @@ pub struct FitsIntoIter {
     position: u64,
 }
 
+pub struct FitsIter<'f> {
+    fits: &'f Fits,
+    position: u64,
+    count: usize,
+    hdus: Vec<Hdu>,
+}
+
 #[derive(Debug)]
 pub struct Hdu {
     header: Vec<(HeaderKeyWord, Option<HeaderValueComment>)>,
@@ -72,6 +79,10 @@ impl Fits {
         File::open(path).map(|file| {
             Fits { file: Rc::new(RefCell::new(file)) }
         })
+    }
+
+    pub fn iter(&self) -> FitsIter {
+        FitsIter { fits: self, position: 0, count: 0, hdus: Vec::new() }
     }
 }
 
@@ -145,6 +156,67 @@ impl Iterator for FitsIntoIter {
             self.position = next_position;
         });
         Some(hdu)
+    }
+}
+
+impl<'f> FitsIter<'f> {
+    fn tell(&mut self) -> u64 {
+        self.fits.file.borrow_mut().seek(SeekFrom::Current(0))
+                                   .expect("Could not get cursor position!")
+    }
+
+    fn set_position(&mut self) {
+        self.fits.file.borrow_mut().seek(SeekFrom::Start(self.position))
+                                   .expect("Could not set position!");
+    }
+
+    fn read_next_hdu(&mut self) -> Option<Hdu> {
+        self.set_position();
+        let mut line = CardImage::new();
+        let mut line_count = 0;
+        let mut header = Vec::new();
+        let mut end = false;
+        while (line_count % 36) != 0 || !end {
+            match self.fits.file.borrow_mut().read_exact(&mut line.0) {
+                Ok(_)  => {
+                    line.to_header_key_value().map(|(key, val)| {
+                        if key == "END" {
+                            end = true;
+                        }
+                        header.push((key, val));
+                    });
+                },
+                Err(_) => return None,
+            };
+            line_count += 1;
+        }
+        let data_start_position = self.tell();
+        let hdu = Hdu {
+            header: header,
+            data_start: data_start_position,
+            file: self.fits.file.clone(),
+            data: None,
+        };
+        hdu.data_byte_length().map(|len| {
+            let mut next_position = data_start_position + (len as u64);
+            /* Go to end of record */
+            while (next_position % (36 * 80)) != 0 {
+                next_position += 1;
+            }
+            self.position = next_position;
+        });
+        Some(hdu)
+    }
+}
+
+impl<'f> Iterator for FitsIter<'f> {
+    type Item = &'f Hdu;
+    fn next(&mut self) -> Option<&'f Hdu> {
+        self.read_next_hdu().map(|hdu| {
+            self.hdus.push(hdu);
+            let raw = self.hdus.last().unwrap() as *const Hdu;
+            unsafe { &*raw }
+        })
     }
 }
 
@@ -580,5 +652,19 @@ mod tests {
             }
             _ => panic!("Should be Characters!")
         }
+    }
+
+    #[test]
+    fn iterate_over_hdu_no_consume() {
+        let fits = Fits::open("test/testprog.fit").unwrap();
+        let mut iter = fits.iter();
+        let primary_hdu = iter.next().unwrap();
+        assert_eq!(primary_hdu.header[0].0, "SIMPLE");
+        let hdu2 = iter.next().unwrap();
+        assert_eq!(hdu2.header[0].0, "XTENSION");
+        assert_eq!(hdu2.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("BINTABLE")));
+        let hdu3 = iter.next().unwrap();
+        assert_eq!(hdu3.header[0].0, "XTENSION");
+        assert_eq!(hdu3.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("IMAGE")));
     }
 }
