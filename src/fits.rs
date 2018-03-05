@@ -149,9 +149,9 @@ impl Hdu {
         })
     }
 
-    pub fn data_byte_length(&self) -> Option<usize> {
-        let mut len = 0;
+    fn data_length(&self) -> Option<usize> {
         self.value_as_integer_number("NAXIS").and_then(|naxis| {
+            let mut len = 0;
             for i in 1..(naxis + 1) {
                 let mut key = String::from("NAXIS");
                 key.push_str(&i.to_string());
@@ -166,6 +166,12 @@ impl Hdu {
                     },
                 }
             }
+            Some(len)
+        })
+    }
+
+    fn data_byte_length(&self) -> Option<usize> {
+        self.data_length().and_then(|len| {
             self.value_as_integer_number("BITPIX").map(|bit| {
                 let bit = if bit < 0 { -bit } else { bit };
                 len * (bit as usize / 8)
