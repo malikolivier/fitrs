@@ -96,6 +96,12 @@ impl Fits {
     pub fn iter_mut(&mut self) -> FitsIterMut {
         FitsIterMut { fits: self, position: 0, count: 0 }
     }
+
+    pub fn load_all(&mut self) {
+        for hdu in self.iter_mut() {
+            hdu.read_data();
+        }
+    }
 }
 
 impl Index<usize> for Fits {
@@ -826,5 +832,15 @@ mod tests {
     fn index_with_string_not_found_over_fits() {
         let fits = Fits::open("test/testprog.fit").unwrap();
         let hdu2 = &fits["FOOBAR"];
+    }
+
+    use time::precise_time_ns;
+
+    #[test]
+    fn fits_load_all() {
+        let tick = precise_time_ns();
+        let mut fits = Fits::open("/home/malik/workspace/lab/aflak/data/manga-7443-12703-LINCUBE.fits").unwrap();
+        fits.load_all();
+        assert_eq!(0.0, (precise_time_ns() - tick) as f64 / 1000_000.0);
     }
 }
