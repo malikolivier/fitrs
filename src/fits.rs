@@ -109,7 +109,7 @@ impl Iterator for FitsIntoIter {
                         header.push((key, val));
                     });
                 },
-                Err(_) => break,
+                Err(_) => return None,
             };
             line_count += 1;
         }
@@ -448,5 +448,11 @@ mod tests {
         let hdu3 = iter.next().unwrap();
         assert_eq!(hdu3.header[0].0, "XTENSION");
         assert_eq!(hdu3.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("IMAGE")));
+    }
+
+    #[test]
+    fn iterate_over_all_hdus() {
+        let fits = Fits::open("test/testprog.fit").unwrap();
+        assert_eq!(fits.into_iter().count(), 8);
     }
 }
