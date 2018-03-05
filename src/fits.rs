@@ -3,7 +3,7 @@ use std::io::{Read, Error, Seek, SeekFrom};
 use std::result::Result;
 use std::str::{FromStr, from_utf8};
 use std::rc::Rc;
-use std::cell::RefCell;
+use std::cell::{RefCell, RefMut};
 
 use byteorder::{BigEndian, ReadBytesExt};
 
@@ -93,15 +93,37 @@ impl IntoIterator for Fits {
     }
 }
 
-impl FitsIntoIter {
+trait MovableCursor {
+    fn file(&mut self) -> RefMut<File>;
+    fn position(&self) -> u64;
+
     fn tell(&mut self) -> u64 {
-        self.file.borrow_mut().seek(SeekFrom::Current(0))
-                              .expect("Could not get cursor position!")
+        self.file().seek(SeekFrom::Current(0))
+                   .expect("Could not get cursor position!")
     }
 
     fn set_position(&mut self) {
-        self.file.borrow_mut().seek(SeekFrom::Start(self.position))
-                              .expect("Could not set position!");
+        let position = self.position();
+        self.file().seek(SeekFrom::Start(position))
+                   .expect("Could not set position!");
+    }
+}
+
+impl MovableCursor for FitsIntoIter {
+    fn file(&mut self) -> RefMut<File> {
+        self.file.borrow_mut()
+    }
+    fn position(&self) -> u64 {
+        self.position
+    }
+}
+
+impl<'f> MovableCursor for FitsIter<'f> {
+    fn file(&mut self) -> RefMut<File> {
+        self.fits.file.borrow_mut()
+    }
+    fn position(&self) -> u64 {
+        self.position
     }
 }
 
@@ -147,16 +169,6 @@ impl Iterator for FitsIntoIter {
 }
 
 impl<'f> FitsIter<'f> {
-    fn tell(&mut self) -> u64 {
-        self.fits.file.borrow_mut().seek(SeekFrom::Current(0))
-                                   .expect("Could not get cursor position!")
-    }
-
-    fn set_position(&mut self) {
-        self.fits.file.borrow_mut().seek(SeekFrom::Start(self.position))
-                                   .expect("Could not set position!");
-    }
-
     fn read_next_hdu(&mut self) -> Option<Hdu> {
         self.set_position();
         let mut line = CardImage::new();
