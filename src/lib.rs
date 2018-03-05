@@ -1,3 +1,3 @@
 extern crate byteorder;
 
-mod fits;
+pub mod fits;

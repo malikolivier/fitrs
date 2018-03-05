@@ -20,7 +20,6 @@ pub struct FitsIntoIter {
 pub struct FitsIter<'f> {
     fits: &'f Fits,
     position: u64,
-    count: usize,
     hdus: Vec<Hdu>,
 }
 
@@ -82,7 +81,7 @@ impl Fits {
     }
 
     pub fn iter(&self) -> FitsIter {
-        FitsIter { fits: self, position: 0, count: 0, hdus: Vec::new() }
+        FitsIter { fits: self, position: 0, hdus: Vec::new() }
     }
 }
 
@@ -102,18 +101,6 @@ impl FitsIntoIter {
 
     fn set_position(&mut self) {
         self.file.borrow_mut().seek(SeekFrom::Start(self.position))
-                              .expect("Could not set position!");
-    }
-}
-
-impl Hdu {
-    fn tell(&mut self) -> u64 {
-        self.file.borrow_mut().seek(SeekFrom::Current(0))
-                              .expect("Could not get cursor position!")
-    }
-
-    fn set_position(&mut self) {
-        self.file.borrow_mut().seek(SeekFrom::Start(self.data_start))
                               .expect("Could not set position!");
     }
 }
@@ -335,13 +322,13 @@ impl Hdu {
         self.data.as_ref().unwrap()
     }
 
-    fn inner_read_data_force<F, T>(&mut self, mut read: F) -> FitsDataArray<T>
+    fn inner_read_data_force<F, T>(&mut self, read: F) -> FitsDataArray<T>
         where F: Fn(&mut File) -> T
     {
         let naxis = self.naxis().expect("Get NAXIS");
         let length = naxis.iter().product();
         let mut array = FitsDataArray::new(&naxis);
-        for i in 0..length {
+        for _ in 0..length {
             array.data.push(read(&mut *self.file.borrow_mut()))
         }
         array
