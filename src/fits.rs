@@ -22,11 +22,13 @@ pub struct FitsIter<'f> {
     fits: &'f Fits,
     position: u64,
     hdus: Vec<Hdu>,
+    count: usize,
 }
 
 pub struct FitsIterMut<'f> {
     fits: &'f mut Fits,
     position: u64,
+    count: usize,
 }
 
 #[derive(Debug)]
@@ -87,11 +89,11 @@ impl Fits {
     }
 
     pub fn iter(&self) -> FitsIter {
-        FitsIter { fits: self, position: 0, hdus: Vec::new() }
+        FitsIter { fits: self, position: 0, hdus: Vec::new(), count: 0 }
     }
 
     pub fn iter_mut(&mut self) -> FitsIterMut {
-        FitsIterMut { fits: self, position: 0 }
+        FitsIterMut { fits: self, position: 0, count: 0 }
     }
 }
 
@@ -226,7 +228,12 @@ impl<'f> IterableOverHdu for FitsIterMut<'f> {
 impl<'f> Iterator for FitsIter<'f> {
     type Item = &'f Hdu;
     fn next(&mut self) -> Option<&'f Hdu> {
+        if self.count < self.fits.hdus.len() {
+            self.count += 1;
+            return Some(&self.fits.hdus[self.count]);
+        }
         self.read_next_hdu().map(|hdu| {
+            self.count += 1;
             self.hdus.push(hdu);
             let raw = self.hdus.last().unwrap() as *const Hdu;
             unsafe { &*raw }
@@ -237,7 +244,14 @@ impl<'f> Iterator for FitsIter<'f> {
 impl<'f> Iterator for FitsIterMut<'f> {
     type Item = &'f mut Hdu;
     fn next(&mut self) -> Option<&'f mut Hdu> {
+        if self.count < self.fits.hdus.len() {
+            self.count += 1;
+            let mut hdu = self.fits.hdus.get_mut(self.count).unwrap();
+            let raw = hdu as *mut Hdu;
+            unsafe { return Some(&mut *raw); }
+        }
         self.read_next_hdu().map(|hdu| {
+            self.count += 1;
             self.fits.hdus.push(hdu);
             let mut _hdu = self.fits.hdus.last_mut().unwrap();
             let raw = _hdu as *mut Hdu;
