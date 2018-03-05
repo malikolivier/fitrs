@@ -245,7 +245,7 @@ impl<'f> Iterator for FitsIterMut<'f> {
     type Item = &'f mut Hdu;
     fn next(&mut self) -> Option<&'f mut Hdu> {
         if self.count < self.fits.hdus.len() {
-            let mut hdu = self.fits.hdus.get_mut(self.count).unwrap();
+            let hdu = self.fits.hdus.get_mut(self.count).unwrap();
             self.count += 1;
             let raw = hdu as *mut Hdu;
             unsafe { return Some(&mut *raw); }
