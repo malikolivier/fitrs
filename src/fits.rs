@@ -10,6 +10,7 @@ use byteorder::{BigEndian, ReadBytesExt};
 
 pub struct Fits {
     file: Rc<RefCell<File>>,
+    hdus: Vec<Hdu>,
 }
 
 pub struct FitsIntoIter {
@@ -21,6 +22,11 @@ pub struct FitsIter<'f> {
     fits: &'f Fits,
     position: u64,
     hdus: Vec<Hdu>,
+}
+
+pub struct FitsIterMut<'f> {
+    fits: &'f mut Fits,
+    position: u64,
 }
 
 #[derive(Debug)]
@@ -76,12 +82,16 @@ struct CardImage([u8; 80]);
 impl Fits {
     pub fn open(path: &str) -> Result<Fits, Error> {
         File::open(path).map(|file| {
-            Fits { file: Rc::new(RefCell::new(file)) }
+            Fits { file: Rc::new(RefCell::new(file)), hdus: Vec::new() }
         })
     }
 
     pub fn iter(&self) -> FitsIter {
         FitsIter { fits: self, position: 0, hdus: Vec::new() }
+    }
+
+    pub fn iter_mut(&mut self) -> FitsIterMut {
+        FitsIterMut { fits: self, position: 0 }
     }
 }
 
@@ -119,6 +129,15 @@ impl MovableCursor for FitsIntoIter {
 }
 
 impl<'f> MovableCursor for FitsIter<'f> {
+    fn file(&mut self) -> RefMut<File> {
+        self.fits.file.borrow_mut()
+    }
+    fn position(&self) -> u64 {
+        self.position
+    }
+}
+
+impl<'f> MovableCursor for FitsIterMut<'f> {
     fn file(&mut self) -> RefMut<File> {
         self.fits.file.borrow_mut()
     }
@@ -195,6 +214,15 @@ impl IterableOverHdu for FitsIntoIter {
     }
 }
 
+impl<'f> IterableOverHdu for FitsIterMut<'f> {
+    fn file_rc(&self) -> Rc<RefCell<File>> {
+        self.fits.file.clone()
+    }
+    fn set_next_position(&mut self, position: u64) {
+        self.position = position;
+    }
+}
+
 impl<'f> Iterator for FitsIter<'f> {
     type Item = &'f Hdu;
     fn next(&mut self) -> Option<&'f Hdu> {
@@ -202,6 +230,18 @@ impl<'f> Iterator for FitsIter<'f> {
             self.hdus.push(hdu);
             let raw = self.hdus.last().unwrap() as *const Hdu;
             unsafe { &*raw }
+        })
+    }
+}
+
+impl<'f> Iterator for FitsIterMut<'f> {
+    type Item = &'f mut Hdu;
+    fn next(&mut self) -> Option<&'f mut Hdu> {
+        self.read_next_hdu().map(|hdu| {
+            self.fits.hdus.push(hdu);
+            let mut _hdu = self.fits.hdus.last_mut().unwrap();
+            let raw = _hdu as *mut Hdu;
+            unsafe { &mut *raw }
         })
     }
 }
@@ -644,6 +684,20 @@ mod tests {
     fn iterate_over_hdu_no_consume() {
         let fits = Fits::open("test/testprog.fit").unwrap();
         let mut iter = fits.iter();
+        let primary_hdu = iter.next().unwrap();
+        assert_eq!(primary_hdu.header[0].0, "SIMPLE");
+        let hdu2 = iter.next().unwrap();
+        assert_eq!(hdu2.header[0].0, "XTENSION");
+        assert_eq!(hdu2.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("BINTABLE")));
+        let hdu3 = iter.next().unwrap();
+        assert_eq!(hdu3.header[0].0, "XTENSION");
+        assert_eq!(hdu3.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("IMAGE")));
+    }
+
+    #[test]
+    fn iterate_over_hdu_mut() {
+        let mut fits = Fits::open("test/testprog.fit").unwrap();
+        let mut iter = fits.iter_mut();
         let primary_hdu = iter.next().unwrap();
         assert_eq!(primary_hdu.header[0].0, "SIMPLE");
         let hdu2 = iter.next().unwrap();
