@@ -55,8 +55,8 @@ pub struct FitsDataArray<T> {
 }
 
 impl<T> FitsDataArray<T> {
-    fn new(shape: &[usize]) -> Self {
-        Self { shape: Vec::from(shape), data: Vec::new() }
+    fn new(shape: &[usize], data: Vec<T>) -> Self {
+        Self { shape: Vec::from(shape), data }
     }
 }
 
@@ -391,38 +391,54 @@ impl Hdu {
     fn read_data_force(&mut self) -> &FitsData {
         let bitpix = self.value_as_integer_number("BITPIX").expect("BITPIX is present");
         let data = match bitpix {
-            8   => FitsData::Characters(self.inner_read_data_force(|file| {
-                    let mut buf = [0u8; 1];
+            8   => FitsData::Characters(self.inner_read_data_force(|file, len| {
+                    let mut buf = vec![0u8; len];
                     file.read_exact(&mut buf).expect("Read array");
-                    buf[0] as char
+                    buf.into_iter().map(|n| n as char).collect()
                 })),
             16  => {
                 let blank = self.value_as_integer_number("BLANK");
-                FitsData::IntegersI32(self.inner_read_data_force(|file| {
-                    let buf = file.read_i16::<BigEndian>().expect("Read array") as i32;
-                    if blank.is_some() && buf == blank.unwrap() {
-                        None
+                FitsData::IntegersI32(self.inner_read_data_force(|file, len| {
+                    let mut buf = vec![0i16; len];
+                    file.read_i16_into::<BigEndian>(&mut buf).expect("Read array");
+                    if blank.is_some() {
+                        let blank = blank.unwrap() as i16;
+                        buf.into_iter().map(|n| if n == blank {
+                            None
+                        } else {
+                            Some(n as i32)
+                        }).collect()
                     } else {
-                        Some(buf)
+                        buf.into_iter().map(|n| Some(n as i32)).collect()
                     }
                 }))
             },
             32  => {
                 let blank = self.value_as_integer_number("BLANK");
-                FitsData::IntegersI32(self.inner_read_data_force(|file| {
-                    let buf = file.read_i32::<BigEndian>().expect("Read array");
-                    if blank.is_some() && buf == blank.unwrap() {
-                        None
+                FitsData::IntegersI32(self.inner_read_data_force(|file, len| {
+                    let mut buf = vec![0i32; len];
+                    file.read_i32_into::<BigEndian>(&mut buf).expect("Read array");
+                    if blank.is_some() {
+                        let blank = blank.unwrap();
+                        buf.into_iter().map(|n| if n == blank {
+                            None
+                        } else {
+                            Some(n)
+                        }).collect()
                     } else {
-                        Some(buf)
+                        buf.into_iter().map(Some).collect()
                     }
                 }))
             },
-            -32 => FitsData::FloatingPoint64(self.inner_read_data_force(|file| {
-                    file.read_f32::<BigEndian>().expect("Read array") as f64
+            -32 => FitsData::FloatingPoint64(self.inner_read_data_force(|file, len| {
+                    let mut buf = vec![0f32; len];
+                    file.read_f32_into::<BigEndian>(&mut buf).expect("Read array");
+                    buf.into_iter().map(|n| n as f64).collect()
                 })),
-            -64 => FitsData::FloatingPoint64(self.inner_read_data_force(|file| {
-                    file.read_f64::<BigEndian>().expect("Read array")
+            -64 => FitsData::FloatingPoint64(self.inner_read_data_force(|file, len| {
+                let mut buf = vec![0f64; len];
+                file.read_f64_into::<BigEndian>(&mut buf).expect("Read array");
+                buf
                 })),
             _   => panic!("Unexpected value for BITPIX")
         };
@@ -431,15 +447,11 @@ impl Hdu {
     }
 
     fn inner_read_data_force<F, T>(&mut self, read: F) -> FitsDataArray<T>
-        where F: Fn(&mut File) -> T
+        where F: Fn(&mut File, usize) -> Vec<T>
     {
         let naxis = self.naxis().expect("Get NAXIS");
         let length = naxis.iter().product();
-        let mut array = FitsDataArray::new(&naxis);
-        for _ in 0..length {
-            array.data.push(read(&mut *self.file.borrow_mut()))
-        }
-        array
+        FitsDataArray::new(&naxis, read(&mut *self.file.borrow_mut(), length))
     }
 }
 
