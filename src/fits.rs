@@ -58,7 +58,7 @@ struct HeaderValueComment {
 pub enum HeaderValue {
     CharacterString(String),
     Logical(bool),
-    IntegerNumber(i64),
+    IntegerNumber(i32),
     RealFloatingNumber(f64),
     ComplexIntegerNumber(i64, i64),
     ComplexFloatingNumber(f64, f64),
@@ -159,7 +159,7 @@ impl Hdu {
         None
     }
 
-    fn value_as_integer_number(&self, key: &str) -> Option<i64> {
+    fn value_as_integer_number(&self, key: &str) -> Option<i32> {
         self.value(key).and_then(|val| {
             match val {
                 &HeaderValue::IntegerNumber(n) => Some(n),
@@ -341,7 +341,7 @@ impl HeaderValue {
     fn new_integer(value: &[u8]) -> Option<HeaderValue> {
         from_utf8(value).ok().and_then(|string| {
             let trimmed = string.trim();
-            i64::from_str_radix(trimmed, 10).ok()
+            i32::from_str_radix(trimmed, 10).ok()
         }).map(HeaderValue::IntegerNumber)
     }
 
