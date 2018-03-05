@@ -134,6 +134,18 @@ impl<'s> Index<&'s str> for Fits {
     }
 }
 
+impl<'s> IndexMut<&'s str> for Fits {
+    fn index_mut(&mut self, index: &str) -> &mut Self::Output {
+        let value = Some(HeaderValue::CharacterString(String::from(index)));
+        for hdu in self.iter_mut() {
+            if hdu.value("EXTNAME") == value.as_ref() {
+                return hdu;
+            }
+        }
+        panic!("Extension not found!");
+    }
+}
+
 impl IntoIterator for Fits {
     type Item = Hdu;
     type IntoIter = FitsIntoIter;
