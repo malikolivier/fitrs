@@ -19,6 +19,25 @@ pub struct Hdu {
     header: Vec<(HeaderKeyWord, Option<HeaderValueComment>)>,
     data_start: u64,
     file: Rc<RefCell<File>>,
+    data: Option<FitsData>,
+}
+
+#[derive(Debug)]
+pub enum FitsData {
+    Characters(FitsDataArray<char>),
+    IntegersU8(FitsDataArray<u8>),
+    IntegersI16(FitsDataArray<i16>),
+    IntegersI32(FitsDataArray<i32>),
+    IntegersU16(FitsDataArray<u16>),
+    IntegersU32(FitsDataArray<u32>),
+    FloatingPoint32(FitsDataArray<f32>),
+    FloatingPoint64(FitsDataArray<f64>),
+}
+
+#[derive(Debug)]
+pub struct FitsDataArray<T> {
+    naxis: Vec<usize>,
+    data: Vec<T>,
 }
 
 type HeaderKeyWord = String;
@@ -102,6 +121,7 @@ impl Iterator for FitsIntoIter {
             header: header,
             data_start: data_start_position,
             file: self.file.clone(),
+            data: None,
         };
         hdu.data_byte_length().map(|len| {
             self.position += data_start_position + (len as u64);
