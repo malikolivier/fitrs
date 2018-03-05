@@ -121,7 +121,12 @@ impl Iterator for FitsIntoIter {
             data: None,
         };
         hdu.data_byte_length().map(|len| {
-            self.position += data_start_position + (len as u64);
+            let mut next_position = data_start_position + (len as u64);
+            /* Go to end of record */
+            while (next_position % (36 * 80)) != 0 {
+                next_position += 1;
+            }
+            self.position = next_position;
         });
         Some(hdu)
     }
@@ -436,11 +441,12 @@ mod tests {
         let fits = Fits::open("test/testprog.fit").unwrap();
         let mut iter = fits.into_iter();
         let primary_hdu = iter.next().unwrap();
-        println!("{:?}", primary_hdu);
+        assert_eq!(primary_hdu.header[0].0, "SIMPLE");
         let hdu2 = iter.next().unwrap();
-        println!("{:?}", hdu2);
+        assert_eq!(hdu2.header[0].0, "XTENSION");
+        assert_eq!(hdu2.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("BINTABLE")));
         let hdu3 = iter.next().unwrap();
-        println!("{:?}", hdu3);
-        assert_eq!(1, 2);
+        assert_eq!(hdu3.header[0].0, "XTENSION");
+        assert_eq!(hdu3.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("IMAGE")));
     }
 }
