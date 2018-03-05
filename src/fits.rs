@@ -2,21 +2,28 @@ use std::fs::File;
 use std::io::{Read, Error, Seek, SeekFrom};
 use std::result::Result;
 use std::str::{FromStr, from_utf8};
+use std::rc::Rc;
+use std::cell::RefCell;
 
 pub struct Fits {
-    file: File,
+    file: Rc<RefCell<File>>,
 }
 
 pub struct FitsIntoIter {
-    file: File,
+    file: Rc<RefCell<File>>,
+    position: u64,
 }
 
+#[derive(Debug)]
 pub struct Hdu {
     header: Vec<(HeaderKeyWord, Option<HeaderValueComment>)>,
+    data_start: u64,
+    file: Rc<RefCell<File>>,
 }
 
 type HeaderKeyWord = String;
 
+#[derive(Debug)]
 struct HeaderValueComment {
     value: Option<HeaderValue>,
     comment: Option<HeaderComment>,
@@ -39,7 +46,7 @@ struct CardImage([u8; 80]);
 impl Fits {
     pub fn open(path: &str) -> Result<Fits, Error> {
         File::open(path).map(|file| {
-            Fits { file: file }
+            Fits { file: Rc::new(RefCell::new(file)) }
         })
     }
 }
@@ -48,13 +55,27 @@ impl IntoIterator for Fits {
     type Item = Hdu;
     type IntoIter = FitsIntoIter;
     fn into_iter(self) -> Self::IntoIter {
-        FitsIntoIter { file: self.file }
+        FitsIntoIter { file: self.file, position: 0 }
+    }
+}
+
+impl FitsIntoIter {
+    fn tell(&mut self) -> u64 {
+        self.file.borrow_mut().seek(SeekFrom::Current(0))
+                              .expect("Could not get cursor position!")
+    }
+
+    fn set_position(&mut self) {
+        let current_position = self.position;
+        self.file.borrow_mut().seek(SeekFrom::Start(current_position))
+                              .expect("Could not set position!");
     }
 }
 
 impl Iterator for FitsIntoIter {
     type Item = Hdu;
     fn next(&mut self) -> Option<Self::Item> {
+        self.set_position();
         let mut line = CardImage::new();
         let mut line_count = 0;
         let mut header = Vec::new();
@@ -63,7 +84,7 @@ impl Iterator for FitsIntoIter {
             if (line_count % 36) == 0 && end {
                 break;
             }
-            match self.file.read_exact(&mut line.0) {
+            match self.file.borrow_mut().read_exact(&mut line.0) {
                 Ok(_)  => {
                     line.to_header_key_value().map(|(key, val)| {
                         if key == "END" {
@@ -76,9 +97,14 @@ impl Iterator for FitsIntoIter {
             };
             line_count += 1;
         }
-        let hdu = Hdu { header: header };
+        let data_start_position = self.tell();
+        let hdu = Hdu {
+            header: header,
+            data_start: data_start_position,
+            file: self.file.clone(),
+        };
         hdu.data_byte_length().map(|len| {
-            self.file.seek(SeekFrom::Current(len as i64)).expect("Could not move cursor!");
+            self.position += data_start_position + (len as u64);
         });
         Some(hdu)
     }
@@ -376,8 +402,11 @@ mod tests {
         let fits = Fits::open("test/testprog.fit").unwrap();
         let mut iter = fits.into_iter();
         let primary_hdu = iter.next().unwrap();
-        let hdu2 = iter.next();
-        let hdu3 = iter.next();
-        assert_eq!(hdu2, None);
+        println!("{:?}", primary_hdu);
+        let hdu2 = iter.next().unwrap();
+        println!("{:?}", hdu2);
+        let hdu3 = iter.next().unwrap();
+        println!("{:?}", hdu3);
+        assert_eq!(1, 2);
     }
 }
