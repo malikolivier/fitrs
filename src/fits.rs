@@ -25,11 +25,8 @@ pub struct Hdu {
 #[derive(Debug)]
 pub enum FitsData {
     Characters(FitsDataArray<char>),
-    IntegersU8(FitsDataArray<u8>),
-    IntegersI16(FitsDataArray<i16>),
-    IntegersI32(FitsDataArray<i32>),
-    IntegersU16(FitsDataArray<u16>),
-    IntegersU32(FitsDataArray<u32>),
+    IntegersI32(FitsDataArray<Option<i32>>),
+    IntegersU32(FitsDataArray<Option<u32>>),
     FloatingPoint32(FitsDataArray<f32>),
     FloatingPoint64(FitsDataArray<f64>),
 }
