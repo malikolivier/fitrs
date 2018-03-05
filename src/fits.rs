@@ -99,10 +99,7 @@ impl Iterator for FitsIntoIter {
         let mut line_count = 0;
         let mut header = Vec::new();
         let mut end = false;
-        while !end {
-            if (line_count % 36) == 0 && end {
-                break;
-            }
+        while (line_count % 36) != 0 || !end {
             match self.file.borrow_mut().read_exact(&mut line.0) {
                 Ok(_)  => {
                     line.to_header_key_value().map(|(key, val)| {
