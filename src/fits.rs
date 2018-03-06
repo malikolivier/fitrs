@@ -57,7 +57,10 @@ pub struct FitsDataArray<T> {
 
 impl<T> FitsDataArray<T> {
     fn new(shape: &[usize], data: Vec<T>) -> Self {
-        Self { shape: Vec::from(shape), data }
+        Self {
+            shape: Vec::from(shape),
+            data,
+        }
     }
 }
 
@@ -86,16 +89,28 @@ struct CardImage([u8; 80]);
 impl Fits {
     pub fn open(path: &str) -> Result<Fits, Error> {
         File::open(path).map(|file| {
-            Fits { file: Rc::new(RefCell::new(file)), hdus: Vec::new() }
+            Fits {
+                file: Rc::new(RefCell::new(file)),
+                hdus: Vec::new(),
+            }
         })
     }
 
     pub fn iter(&self) -> FitsIter {
-        FitsIter { fits: self, position: 0, hdus: Vec::new(), count: 0 }
+        FitsIter {
+            fits: self,
+            position: 0,
+            hdus: Vec::new(),
+            count: 0,
+        }
     }
 
     pub fn iter_mut(&mut self) -> FitsIterMut {
-        FitsIterMut { fits: self, position: 0, count: 0 }
+        FitsIterMut {
+            fits: self,
+            position: 0,
+            count: 0,
+        }
     }
 
     pub fn load_all(&mut self) {
@@ -157,7 +172,10 @@ impl IntoIterator for Fits {
     type Item = Hdu;
     type IntoIter = FitsIntoIter;
     fn into_iter(self) -> Self::IntoIter {
-        FitsIntoIter { file: self.file, position: 0 }
+        FitsIntoIter {
+            file: self.file,
+            position: 0,
+        }
     }
 }
 
@@ -166,14 +184,16 @@ trait MovableCursor {
     fn position(&self) -> u64;
 
     fn tell(&mut self) -> u64 {
-        self.file().seek(SeekFrom::Current(0))
-                   .expect("Could not get cursor position!")
+        self.file().seek(SeekFrom::Current(0)).expect(
+            "Could not get cursor position!",
+        )
     }
 
     fn set_position(&mut self) {
         let position = self.position();
-        self.file().seek(SeekFrom::Start(position))
-                   .expect("Could not set position!");
+        self.file().seek(SeekFrom::Start(position)).expect(
+            "Could not set position!",
+        );
     }
 }
 
@@ -223,14 +243,14 @@ trait IterableOverHdu: MovableCursor {
         let mut end = false;
         while (line_count % 36) != 0 || !end {
             match self.file().read_exact(&mut line.0) {
-                Ok(_)  => {
+                Ok(_) => {
                     line.to_header_key_value().map(|(key, val)| {
                         if key == "END" {
                             end = true;
                         }
                         header.push((key, val));
                     });
-                },
+                }
                 Err(_) => return None,
             };
             line_count += 1;
@@ -304,7 +324,9 @@ impl<'f> Iterator for FitsIterMut<'f> {
             let hdu = self.fits.hdus.get_mut(self.count).unwrap();
             self.count += 1;
             let raw = hdu as *mut Hdu;
-            unsafe { return Some(&mut *raw); }
+            unsafe {
+                return Some(&mut *raw);
+            }
         }
         self.read_next_hdu().map(|hdu| {
             self.count += 1;
@@ -320,18 +342,18 @@ impl Hdu {
     pub fn value(&self, key: &str) -> Option<&HeaderValue> {
         for line in self.header.iter() {
             if line.0 == key {
-                return line.1.as_ref().and_then(|value_comment| { value_comment.value.as_ref() });
+                return line.1.as_ref().and_then(
+                    |value_comment| value_comment.value.as_ref(),
+                );
             }
         }
         None
     }
 
     fn value_as_integer_number(&self, key: &str) -> Option<i32> {
-        self.value(key).and_then(|val| {
-            match val {
-                &HeaderValue::IntegerNumber(n) => Some(n),
-                _                              => None,
-            }
+        self.value(key).and_then(|val| match val {
+            &HeaderValue::IntegerNumber(n) => Some(n),
+            _ => None,
         })
     }
 
@@ -390,65 +412,72 @@ impl Hdu {
     }
 
     fn read_data_force(&mut self) -> &FitsData {
-        let bitpix = self.value_as_integer_number("BITPIX").expect("BITPIX is present");
+        let bitpix = self.value_as_integer_number("BITPIX").expect(
+            "BITPIX is present",
+        );
         let data = match bitpix {
-            8   => FitsData::Characters(self.inner_read_data_force(|file, len| {
-                    let mut buf = vec![0u8; len];
-                    file.read_exact(&mut buf).expect("Read array");
-                    buf.into_iter().map(|n| n as char).collect()
-                })),
-            16  => {
+            8 => FitsData::Characters(self.inner_read_data_force(|file, len| {
+                let mut buf = vec![0u8; len];
+                file.read_exact(&mut buf).expect("Read array");
+                buf.into_iter().map(|n| n as char).collect()
+            })),
+            16 => {
                 let blank = self.value_as_integer_number("BLANK");
                 FitsData::IntegersI32(self.inner_read_data_force(|file, len| {
                     let mut buf = vec![0i16; len];
-                    file.read_i16_into::<BigEndian>(&mut buf).expect("Read array");
+                    file.read_i16_into::<BigEndian>(&mut buf).expect(
+                        "Read array",
+                    );
                     if blank.is_some() {
                         let blank = blank.unwrap() as i16;
-                        buf.into_iter().map(|n| if n == blank {
-                            None
-                        } else {
-                            Some(n as i32)
-                        }).collect()
+                        buf.into_iter()
+                            .map(|n| if n == blank { None } else { Some(n as i32) })
+                            .collect()
                     } else {
                         buf.into_iter().map(|n| Some(n as i32)).collect()
                     }
                 }))
-            },
-            32  => {
+            }
+            32 => {
                 let blank = self.value_as_integer_number("BLANK");
                 FitsData::IntegersI32(self.inner_read_data_force(|file, len| {
                     let mut buf = vec![0i32; len];
-                    file.read_i32_into::<BigEndian>(&mut buf).expect("Read array");
+                    file.read_i32_into::<BigEndian>(&mut buf).expect(
+                        "Read array",
+                    );
                     if blank.is_some() {
                         let blank = blank.unwrap();
-                        buf.into_iter().map(|n| if n == blank {
-                            None
-                        } else {
-                            Some(n)
-                        }).collect()
+                        buf.into_iter()
+                            .map(|n| if n == blank { None } else { Some(n) })
+                            .collect()
                     } else {
                         buf.into_iter().map(Some).collect()
                     }
                 }))
-            },
+            }
             -32 => FitsData::FloatingPoint32(self.inner_read_data_force(|file, len| {
-                    let mut buf = vec![0f32; len];
-                    file.read_f32_into::<BigEndian>(&mut buf).expect("Read array");
-                    buf
-                })),
+                let mut buf = vec![0f32; len];
+                file.read_f32_into::<BigEndian>(&mut buf).expect(
+                    "Read array",
+                );
+                buf
+            })),
             -64 => FitsData::FloatingPoint64(self.inner_read_data_force(|file, len| {
                 let mut buf = vec![0f64; len];
-                file.read_f64_into::<BigEndian>(&mut buf).expect("Read array");
+                file.read_f64_into::<BigEndian>(&mut buf).expect(
+                    "Read array",
+                );
                 buf
-                })),
-            _   => panic!("Unexpected value for BITPIX")
+            })),
+            _ => panic!("Unexpected value for BITPIX"),
         };
         self.data = Some(data);
         self.data.as_ref().unwrap()
     }
 
     fn inner_read_data_force<F, T>(&mut self, read: F) -> FitsDataArray<T>
-        where F: Fn(&mut File, usize) -> Vec<T>
+    where
+        F: Fn(&mut File, usize) -> Vec<T>,
     {
         let naxis = self.naxis().expect("Get NAXIS");
         let length = naxis.iter().product();
@@ -466,15 +495,9 @@ static F_U8: u8 = 'F' as u8;
 impl HeaderValue {
     fn new(value: &[u8]) -> Option<HeaderValue> {
         HeaderValue::new_character_string(value)
-        .or_else(|| {
-            HeaderValue::new_logical(value)
-        })
-        .or_else(|| {
-            HeaderValue::new_integer(value)
-        })
-        .or_else(|| {
-            HeaderValue::new_real_floating(value)
-        })
+            .or_else(|| HeaderValue::new_logical(value))
+            .or_else(|| HeaderValue::new_integer(value))
+            .or_else(|| HeaderValue::new_real_floating(value))
     }
 
     fn new_character_string(subcard: &[u8]) -> Option<HeaderValue> {
@@ -529,23 +552,29 @@ impl HeaderValue {
     }
 
     fn new_integer(value: &[u8]) -> Option<HeaderValue> {
-        from_utf8(value).ok().and_then(|string| {
-            let trimmed = string.trim();
-            i32::from_str_radix(trimmed, 10).ok()
-        }).map(HeaderValue::IntegerNumber)
+        from_utf8(value)
+            .ok()
+            .and_then(|string| {
+                let trimmed = string.trim();
+                i32::from_str_radix(trimmed, 10).ok()
+            })
+            .map(HeaderValue::IntegerNumber)
     }
 
     fn new_real_floating(value: &[u8]) -> Option<HeaderValue> {
-        from_utf8(value).ok().and_then(|string| {
-            let trimmed = string.trim();
-            f64::from_str(trimmed).ok()
-        }).map(HeaderValue::RealFloatingNumber)
+        from_utf8(value)
+            .ok()
+            .and_then(|string| {
+                let trimmed = string.trim();
+                f64::from_str(trimmed).ok()
+            })
+            .map(HeaderValue::RealFloatingNumber)
     }
 }
 
 impl HeaderValueComment {
     fn new(value_comment: &[u8]) -> HeaderValueComment {
-        let mut value_comment_iter = value_comment.split(|c| { *c == SLASH_U8 });
+        let mut value_comment_iter = value_comment.split(|c| *c == SLASH_U8);
         let value_slice = value_comment_iter.next();
         let comment_slice = value_comment_iter.next();
         HeaderValueComment {
@@ -607,12 +636,18 @@ mod tests {
 
     #[test]
     fn read_card_image_character_string() {
-        let card = CardImage::from("AUTHOR  = 'Malik Olivier Boussejra <malik@boussejra.com>' /");
+        let card = CardImage::from(
+            "AUTHOR  = 'Malik Olivier Boussejra <malik@boussejra.com>' /",
+        );
         let header_key_value = card.to_header_key_value().unwrap();
         assert_eq!(header_key_value.0, String::from("AUTHOR"));
         let value_comment = header_key_value.1.unwrap();
-        assert_eq!(value_comment.value, Some(HeaderValue::CharacterString(
-            String::from("Malik Olivier Boussejra <malik@boussejra.com>"))));
+        assert_eq!(
+            value_comment.value,
+            Some(HeaderValue::CharacterString(String::from(
+                "Malik Olivier Boussejra <malik@boussejra.com>",
+            )))
+        );
         assert_eq!(value_comment.comment, Some(String::from("")));
     }
 
@@ -621,7 +656,10 @@ mod tests {
         let card = CardImage::from("AUTHOR  = ''");
         let header_key_value = card.to_header_key_value().unwrap();
         let value_comment = header_key_value.1.unwrap();
-        assert_eq!(value_comment.value, Some(HeaderValue::CharacterString(String::from(""))));
+        assert_eq!(
+            value_comment.value,
+            Some(HeaderValue::CharacterString(String::from("")))
+        );
         assert_eq!(value_comment.comment, None);
     }
 
@@ -630,7 +668,10 @@ mod tests {
         let card = CardImage::from("AUTHOR  = '  ab d  '");
         let header_key_value = card.to_header_key_value().unwrap();
         let value_comment = header_key_value.1.unwrap();
-        assert_eq!(value_comment.value, Some(HeaderValue::CharacterString(String::from("  ab d"))));
+        assert_eq!(
+            value_comment.value,
+            Some(HeaderValue::CharacterString(String::from("  ab d")))
+        );
     }
 
     #[test]
@@ -638,7 +679,10 @@ mod tests {
         let card = CardImage::from("AUTHOR  = '  '");
         let header_key_value = card.to_header_key_value().unwrap();
         let value_comment = header_key_value.1.unwrap();
-        assert_eq!(value_comment.value, Some(HeaderValue::CharacterString(String::from(" "))));
+        assert_eq!(
+            value_comment.value,
+            Some(HeaderValue::CharacterString(String::from(" ")))
+        );
     }
 
     #[test]
@@ -667,10 +711,15 @@ mod tests {
 
     #[test]
     fn read_card_image_character_real() {
-        let card = CardImage::from("EXPTIME =              13501.5 / Total exposure time (seconds)");
+        let card = CardImage::from(
+            "EXPTIME =              13501.5 / Total exposure time (seconds)",
+        );
         let header_key_value = card.to_header_key_value().unwrap();
         let value_comment = header_key_value.1.unwrap();
-        assert_eq!(value_comment.value, Some(HeaderValue::RealFloatingNumber(13501.5)));
+        assert_eq!(
+            value_comment.value,
+            Some(HeaderValue::RealFloatingNumber(13501.5))
+        );
     }
 
     #[test]
@@ -678,7 +727,10 @@ mod tests {
         let card = CardImage::from("CDELT1  =      -1.666667E-03 /");
         let header_key_value = card.to_header_key_value().unwrap();
         let value_comment = header_key_value.1.unwrap();
-        assert_eq!(value_comment.value, Some(HeaderValue::RealFloatingNumber(-1.666667E-03)));
+        assert_eq!(
+            value_comment.value,
+            Some(HeaderValue::RealFloatingNumber(-1.666667E-03))
+        );
     }
 
     #[test]
@@ -687,11 +739,29 @@ mod tests {
         let mut iter = fits.into_iter();
         let hdu = iter.next().unwrap();
         assert_eq!(hdu.value("SIMPLE"), Some(&HeaderValue::Logical(true)));
-        assert_eq!(hdu.value("CARD1"), Some(&HeaderValue::CharacterString(String::from("12345678901234567890123456789012345678901234567890123456789012345678"))));
-        assert_eq!(hdu.value("CARD2"), Some(&HeaderValue::CharacterString(String::from("1234567890123456789012345678901234567890123456789012345678901234'67"))));
-        assert_eq!(hdu.value("CARD3"), Some(&HeaderValue::CharacterString(String::from("1234567890123456789012345678901234567890123456789012345678901234''"))));
+        assert_eq!(
+            hdu.value("CARD1"),
+            Some(&HeaderValue::CharacterString(String::from(
+                "12345678901234567890123456789012345678901234567890123456789012345678",
+            )))
+        );
+        assert_eq!(
+            hdu.value("CARD2"),
+            Some(&HeaderValue::CharacterString(String::from(
+                "1234567890123456789012345678901234567890123456789012345678901234'67",
+            )))
+        );
+        assert_eq!(
+            hdu.value("CARD3"),
+            Some(&HeaderValue::CharacterString(String::from(
+                "1234567890123456789012345678901234567890123456789012345678901234''",
+            )))
+        );
         assert_eq!(hdu.value("KY_IKYJ"), Some(&HeaderValue::IntegerNumber(51)));
-        assert_eq!(hdu.value("KY_IKYE"), Some(&HeaderValue::RealFloatingNumber(-1.3346E+01)));
+        assert_eq!(
+            hdu.value("KY_IKYE"),
+            Some(&HeaderValue::RealFloatingNumber(-1.3346E+01))
+        );
     }
 
     #[test]
@@ -710,10 +780,16 @@ mod tests {
         assert_eq!(primary_hdu.header[0].0, "SIMPLE");
         let hdu2 = iter.next().unwrap();
         assert_eq!(hdu2.header[0].0, "XTENSION");
-        assert_eq!(hdu2.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("BINTABLE")));
+        assert_eq!(
+            hdu2.value("XTENSION").unwrap(),
+            &HeaderValue::CharacterString(String::from("BINTABLE"))
+        );
         let hdu3 = iter.next().unwrap();
         assert_eq!(hdu3.header[0].0, "XTENSION");
-        assert_eq!(hdu3.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("IMAGE")));
+        assert_eq!(
+            hdu3.value("XTENSION").unwrap(),
+            &HeaderValue::CharacterString(String::from("IMAGE"))
+        );
     }
 
     #[test]
@@ -731,12 +807,33 @@ mod tests {
         match data {
             &FitsData::IntegersI32(ref array) => {
                 assert_eq!(array.shape, vec![10, 2]);
-                assert_eq!(array.data, vec![None, Some(2), Some(3), None, Some(5),
-                                            Some(6), Some(7), None, Some(9), Some(10),
-                                            Some(11), None, Some(13), Some(14), Some(15),
-                                            None, Some(17), Some(18), Some(19), None]);
+                assert_eq!(
+                    array.data,
+                    vec![
+                        None,
+                        Some(2),
+                        Some(3),
+                        None,
+                        Some(5),
+                        Some(6),
+                        Some(7),
+                        None,
+                        Some(9),
+                        Some(10),
+                        Some(11),
+                        None,
+                        Some(13),
+                        Some(14),
+                        Some(15),
+                        None,
+                        Some(17),
+                        Some(18),
+                        Some(19),
+                        None,
+                    ]
+                );
             }
-            _ => panic!("Should be IntegersI32!")
+            _ => panic!("Should be IntegersI32!"),
         }
     }
 
@@ -751,14 +848,44 @@ mod tests {
         match data {
             &FitsData::Characters(ref array) => {
                 assert_eq!(array.shape, vec![61, 20]);
-                assert_eq!(&array.data[..30], &vec!['\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}',
-                                                    '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}',
-                                                    '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}',
-                                                    '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{80}',
-                                                    '\u{0}', 'ÿ', 'ÿ', 'ÿ', 'ÿ',
-                                                    '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}'][..]);
+                assert_eq!(
+                    &array.data[..30],
+                    &vec![
+                        '\u{0}',
+                        '\u{0}',
+                        '\u{0}',
+                        '\u{0}',
+                        '\u{0}',
+                        '\u{0}',
+                        '\u{0}',
+                        '\u{0}',
+                        '\u{0}',
+                        '\u{0}',
+                        '\u{0}',
+                        '\u{0}',
+                        '\u{0}',
+                        '\u{0}',
+                        '\u{0}',
+                        '\u{0}',
+                        '\u{0}',
+                        '\u{0}',
+                        '\u{0}',
+                        '\u{80}',
+                        '\u{0}',
+                        'ÿ',
+                        'ÿ',
+                        'ÿ',
+                        'ÿ',
+                        '\u{0}',
+                        '\u{0}',
+                        '\u{0}',
+                        '\u{0}',
+                        '\u{0}',
+                    ]
+                        [..]
+                );
             }
-            _ => panic!("Should be Characters!")
+            _ => panic!("Should be Characters!"),
         }
     }
 
@@ -770,10 +897,16 @@ mod tests {
         assert_eq!(primary_hdu.header[0].0, "SIMPLE");
         let hdu2 = iter.next().unwrap();
         assert_eq!(hdu2.header[0].0, "XTENSION");
-        assert_eq!(hdu2.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("BINTABLE")));
+        assert_eq!(
+            hdu2.value("XTENSION").unwrap(),
+            &HeaderValue::CharacterString(String::from("BINTABLE"))
+        );
         let hdu3 = iter.next().unwrap();
         assert_eq!(hdu3.header[0].0, "XTENSION");
-        assert_eq!(hdu3.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("IMAGE")));
+        assert_eq!(
+            hdu3.value("XTENSION").unwrap(),
+            &HeaderValue::CharacterString(String::from("IMAGE"))
+        );
     }
 
     #[test]
@@ -784,10 +917,16 @@ mod tests {
         assert_eq!(primary_hdu.header[0].0, "SIMPLE");
         let hdu2 = iter.next().unwrap();
         assert_eq!(hdu2.header[0].0, "XTENSION");
-        assert_eq!(hdu2.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("BINTABLE")));
+        assert_eq!(
+            hdu2.value("XTENSION").unwrap(),
+            &HeaderValue::CharacterString(String::from("BINTABLE"))
+        );
         let hdu3 = iter.next().unwrap();
         assert_eq!(hdu3.header[0].0, "XTENSION");
-        assert_eq!(hdu3.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("IMAGE")));
+        assert_eq!(
+            hdu3.value("XTENSION").unwrap(),
+            &HeaderValue::CharacterString(String::from("IMAGE"))
+        );
     }
 
     #[test]
@@ -799,10 +938,16 @@ mod tests {
             assert_eq!(primary_hdu.header[0].0, "SIMPLE");
             let hdu2 = iter.next().unwrap();
             assert_eq!(hdu2.header[0].0, "XTENSION");
-            assert_eq!(hdu2.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("BINTABLE")));
+            assert_eq!(
+                hdu2.value("XTENSION").unwrap(),
+                &HeaderValue::CharacterString(String::from("BINTABLE"))
+            );
             let hdu3 = iter.next().unwrap();
             assert_eq!(hdu3.header[0].0, "XTENSION");
-            assert_eq!(hdu3.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("IMAGE")));
+            assert_eq!(
+                hdu3.value("XTENSION").unwrap(),
+                &HeaderValue::CharacterString(String::from("IMAGE"))
+            );
         }
         {
             let mut iter = fits.iter_mut();
@@ -810,10 +955,16 @@ mod tests {
             assert_eq!(primary_hdu.header[0].0, "SIMPLE");
             let hdu2 = iter.next().unwrap();
             assert_eq!(hdu2.header[0].0, "XTENSION");
-            assert_eq!(hdu2.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("BINTABLE")));
+            assert_eq!(
+                hdu2.value("XTENSION").unwrap(),
+                &HeaderValue::CharacterString(String::from("BINTABLE"))
+            );
             let hdu3 = iter.next().unwrap();
             assert_eq!(hdu3.header[0].0, "XTENSION");
-            assert_eq!(hdu3.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("IMAGE")));
+            assert_eq!(
+                hdu3.value("XTENSION").unwrap(),
+                &HeaderValue::CharacterString(String::from("IMAGE"))
+            );
         }
     }
 
@@ -822,7 +973,10 @@ mod tests {
         let fits = Fits::open("test/testprog.fit").unwrap();
         let hdu2 = &fits[1];
         assert_eq!(hdu2.header[0].0, "XTENSION");
-        assert_eq!(hdu2.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("BINTABLE")));
+        assert_eq!(
+            hdu2.value("XTENSION").unwrap(),
+            &HeaderValue::CharacterString(String::from("BINTABLE"))
+        );
     }
 
     #[test]
@@ -837,7 +991,10 @@ mod tests {
         let fits = Fits::open("test/testprog.fit").unwrap();
         let hdu2 = &fits["Test-ASCII"];
         assert_eq!(hdu2.header[0].0, "XTENSION");
-        assert_eq!(hdu2.value("XTENSION").unwrap(), &HeaderValue::CharacterString(String::from("TABLE")));
+        assert_eq!(
+            hdu2.value("XTENSION").unwrap(),
+            &HeaderValue::CharacterString(String::from("TABLE"))
+        );
     }
 
     #[test]
