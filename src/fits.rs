@@ -851,8 +851,11 @@ mod tests {
 
     #[test]
     fn fits_load_all() {
+        let mut fits = Fits::open("/home/malik/workspace/lab/aflak/data/JCMT_CO32.FITS").unwrap();
         let tick = precise_time_ns();
-        let mut fits = Fits::open("/home/malik/workspace/lab/aflak/data/manga-7443-12703-LINCUBE.fits").unwrap();
+        fits.load_all();
+        assert_eq!(0.0, (precise_time_ns() - tick) as f64 / 1000_000.0);
+        let tick = precise_time_ns();
         fits.load_all();
         assert_eq!(0.0, (precise_time_ns() - tick) as f64 / 1000_000.0);
     }
