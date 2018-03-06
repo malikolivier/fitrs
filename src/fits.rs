@@ -45,6 +45,7 @@ pub enum FitsData {
     Characters(FitsDataArray<char>),
     IntegersI32(FitsDataArray<Option<i32>>),
     IntegersU32(FitsDataArray<Option<u32>>),
+    FloatingPoint32(FitsDataArray<f32>),
     FloatingPoint64(FitsDataArray<f64>),
 }
 
@@ -430,10 +431,10 @@ impl Hdu {
                     }
                 }))
             },
-            -32 => FitsData::FloatingPoint64(self.inner_read_data_force(|file, len| {
+            -32 => FitsData::FloatingPoint32(self.inner_read_data_force(|file, len| {
                     let mut buf = vec![0f32; len];
                     file.read_f32_into::<BigEndian>(&mut buf).expect("Read array");
-                    buf.into_iter().map(|n| n as f64).collect()
+                    buf
                 })),
             -64 => FitsData::FloatingPoint64(self.inner_read_data_force(|file, len| {
                 let mut buf = vec![0f64; len];
