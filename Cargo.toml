@@ -1,5 +1,5 @@
 [package]
-name = "fits"
+name = "fitrs"
 version = "0.1.0"
 authors = ["Malik Olivier Boussejra <malik@boussejra.com>"]
 
