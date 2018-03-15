@@ -2,4 +2,5 @@ extern crate byteorder;
 #[cfg(test)]
 extern crate time;
 
-pub mod fits;
+mod fits;
+pub use fits::{Fits, FitsData, FitsDataArray};

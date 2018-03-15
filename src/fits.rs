@@ -51,8 +51,8 @@ pub enum FitsData {
 
 #[derive(Debug)]
 pub struct FitsDataArray<T> {
-    shape: Vec<usize>,
-    data: Vec<T>,
+    pub shape: Vec<usize>,
+    pub data: Vec<T>,
 }
 
 impl<T> FitsDataArray<T> {
@@ -87,6 +87,7 @@ type HeaderComment = String;
 struct CardImage([u8; 80]);
 
 impl Fits {
+    /// Open FITS file given in provided path
     pub fn open(path: &str) -> Result<Fits, Error> {
         File::open(path).map(|file| {
             Fits {
