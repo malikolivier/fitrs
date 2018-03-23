@@ -1,21 +1,22 @@
 use std::fs::File;
-use std::io::{Read, Error, Seek, SeekFrom};
+use std::io::{Error, Read, Seek, SeekFrom};
 use std::ops::{Index, IndexMut};
 use std::result::Result;
 use std::str::{FromStr, from_utf8};
-use std::rc::Rc;
-use std::cell::{RefCell, RefMut};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use byteorder::{BigEndian, ReadBytesExt};
 
+type FileRc = Arc<Mutex<File>>;
 
+#[derive(Debug)]
 pub struct Fits {
-    file: Rc<RefCell<File>>,
+    file: FileRc,
     hdus: Vec<Hdu>,
 }
 
 pub struct FitsIntoIter {
-    file: Rc<RefCell<File>>,
+    file: FileRc,
     position: u64,
 }
 
@@ -36,7 +37,7 @@ pub struct FitsIterMut<'f> {
 pub struct Hdu {
     header: Vec<(HeaderKeyWord, Option<HeaderValueComment>)>,
     data_start: u64,
-    file: Rc<RefCell<File>>,
+    file: FileRc,
     data: Option<FitsData>,
 }
 
@@ -89,11 +90,9 @@ struct CardImage([u8; 80]);
 impl Fits {
     /// Open FITS file given in provided path
     pub fn open(path: &str) -> Result<Fits, Error> {
-        File::open(path).map(|file| {
-            Fits {
-                file: Rc::new(RefCell::new(file)),
-                hdus: Vec::new(),
-            }
+        File::open(path).map(|file| Fits {
+            file: Arc::new(Mutex::new(file)),
+            hdus: Vec::new(),
         })
     }
 
@@ -181,26 +180,26 @@ impl IntoIterator for Fits {
 }
 
 trait MovableCursor {
-    fn file(&mut self) -> RefMut<File>;
+    fn file(&self) -> MutexGuard<File>;
     fn position(&self) -> u64;
 
     fn tell(&mut self) -> u64 {
-        self.file().seek(SeekFrom::Current(0)).expect(
-            "Could not get cursor position!",
-        )
+        self.file()
+            .seek(SeekFrom::Current(0))
+            .expect("Could not get cursor position!")
     }
 
     fn set_position(&mut self) {
         let position = self.position();
-        self.file().seek(SeekFrom::Start(position)).expect(
-            "Could not set position!",
-        );
+        self.file()
+            .seek(SeekFrom::Start(position))
+            .expect("Could not set position!");
     }
 }
 
 impl MovableCursor for FitsIntoIter {
-    fn file(&mut self) -> RefMut<File> {
-        self.file.borrow_mut()
+    fn file(&self) -> MutexGuard<File> {
+        self.file.lock().expect("Get lock")
     }
     fn position(&self) -> u64 {
         self.position
@@ -208,8 +207,8 @@ impl MovableCursor for FitsIntoIter {
 }
 
 impl<'f> MovableCursor for FitsIter<'f> {
-    fn file(&mut self) -> RefMut<File> {
-        self.fits.file.borrow_mut()
+    fn file(&self) -> MutexGuard<File> {
+        self.fits.file.lock().expect("Get lock")
     }
     fn position(&self) -> u64 {
         self.position
@@ -217,8 +216,8 @@ impl<'f> MovableCursor for FitsIter<'f> {
 }
 
 impl<'f> MovableCursor for FitsIterMut<'f> {
-    fn file(&mut self) -> RefMut<File> {
-        self.fits.file.borrow_mut()
+    fn file(&self) -> MutexGuard<File> {
+        self.fits.file.lock().expect("Get lock")
     }
     fn position(&self) -> u64 {
         self.position
@@ -233,7 +232,7 @@ impl Iterator for FitsIntoIter {
 }
 
 trait IterableOverHdu: MovableCursor {
-    fn file_rc(&self) -> Rc<RefCell<File>>;
+    fn file_rc(&self) -> &FileRc;
     fn set_next_position(&mut self, position: u64);
 
     fn read_next_hdu(&mut self) -> Option<Hdu> {
@@ -276,8 +275,8 @@ trait IterableOverHdu: MovableCursor {
 }
 
 impl<'f> IterableOverHdu for FitsIter<'f> {
-    fn file_rc(&self) -> Rc<RefCell<File>> {
-        self.fits.file.clone()
+    fn file_rc(&self) -> &FileRc {
+        &self.fits.file
     }
     fn set_next_position(&mut self, position: u64) {
         self.position = position;
@@ -285,8 +284,8 @@ impl<'f> IterableOverHdu for FitsIter<'f> {
 }
 
 impl IterableOverHdu for FitsIntoIter {
-    fn file_rc(&self) -> Rc<RefCell<File>> {
-        self.file.clone()
+    fn file_rc(&self) -> &FileRc {
+        &self.file
     }
     fn set_next_position(&mut self, position: u64) {
         self.position = position;
@@ -294,8 +293,8 @@ impl IterableOverHdu for FitsIntoIter {
 }
 
 impl<'f> IterableOverHdu for FitsIterMut<'f> {
-    fn file_rc(&self) -> Rc<RefCell<File>> {
-        self.fits.file.clone()
+    fn file_rc(&self) -> &FileRc {
+        &self.fits.file
     }
     fn set_next_position(&mut self, position: u64) {
         self.position = position;
@@ -343,9 +342,9 @@ impl Hdu {
     pub fn value(&self, key: &str) -> Option<&HeaderValue> {
         for line in self.header.iter() {
             if line.0 == key {
-                return line.1.as_ref().and_then(
-                    |value_comment| value_comment.value.as_ref(),
-                );
+                return line.1
+                    .as_ref()
+                    .and_then(|value_comment| value_comment.value.as_ref());
             }
         }
         None
@@ -413,9 +412,8 @@ impl Hdu {
     }
 
     fn read_data_force(&mut self) -> &FitsData {
-        let bitpix = self.value_as_integer_number("BITPIX").expect(
-            "BITPIX is present",
-        );
+        let bitpix = self.value_as_integer_number("BITPIX")
+            .expect("BITPIX is present");
         let data = match bitpix {
             8 => FitsData::Characters(self.inner_read_data_force(|file, len| {
                 let mut buf = vec![0u8; len];
@@ -426,9 +424,8 @@ impl Hdu {
                 let blank = self.value_as_integer_number("BLANK");
                 FitsData::IntegersI32(self.inner_read_data_force(|file, len| {
                     let mut buf = vec![0i16; len];
-                    file.read_i16_into::<BigEndian>(&mut buf).expect(
-                        "Read array",
-                    );
+                    file.read_i16_into::<BigEndian>(&mut buf)
+                        .expect("Read array");
                     if blank.is_some() {
                         let blank = blank.unwrap() as i16;
                         buf.into_iter()
@@ -443,9 +440,8 @@ impl Hdu {
                 let blank = self.value_as_integer_number("BLANK");
                 FitsData::IntegersI32(self.inner_read_data_force(|file, len| {
                     let mut buf = vec![0i32; len];
-                    file.read_i32_into::<BigEndian>(&mut buf).expect(
-                        "Read array",
-                    );
+                    file.read_i32_into::<BigEndian>(&mut buf)
+                        .expect("Read array");
                     if blank.is_some() {
                         let blank = blank.unwrap();
                         buf.into_iter()
@@ -458,16 +454,14 @@ impl Hdu {
             }
             -32 => FitsData::FloatingPoint32(self.inner_read_data_force(|file, len| {
                 let mut buf = vec![0f32; len];
-                file.read_f32_into::<BigEndian>(&mut buf).expect(
-                    "Read array",
-                );
+                file.read_f32_into::<BigEndian>(&mut buf)
+                    .expect("Read array");
                 buf
             })),
             -64 => FitsData::FloatingPoint64(self.inner_read_data_force(|file, len| {
                 let mut buf = vec![0f64; len];
-                file.read_f64_into::<BigEndian>(&mut buf).expect(
-                    "Read array",
-                );
+                file.read_f64_into::<BigEndian>(&mut buf)
+                    .expect("Read array");
                 buf
             })),
             _ => panic!("Unexpected value for BITPIX"),
@@ -482,7 +476,10 @@ impl Hdu {
     {
         let naxis = self.naxis().expect("Get NAXIS");
         let length = naxis.iter().product();
-        FitsDataArray::new(&naxis, read(&mut *self.file.borrow_mut(), length))
+        FitsDataArray::new(
+            &naxis,
+            read(&mut *self.file.lock().expect("Get file lock"), length),
+        )
     }
 }
 
@@ -620,10 +617,9 @@ impl CardImage {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use super::{Fits, FitsData, CardImage, HeaderValue};
+    use super::{CardImage, Fits, FitsData, HeaderValue};
 
     impl CardImage {
         fn from(s: &str) -> CardImage {
@@ -637,9 +633,7 @@ mod tests {
 
     #[test]
     fn read_card_image_character_string() {
-        let card = CardImage::from(
-            "AUTHOR  = 'Malik Olivier Boussejra <malik@boussejra.com>' /",
-        );
+        let card = CardImage::from("AUTHOR  = 'Malik Olivier Boussejra <malik@boussejra.com>' /");
         let header_key_value = card.to_header_key_value().unwrap();
         assert_eq!(header_key_value.0, String::from("AUTHOR"));
         let value_comment = header_key_value.1.unwrap();
@@ -712,9 +706,8 @@ mod tests {
 
     #[test]
     fn read_card_image_character_real() {
-        let card = CardImage::from(
-            "EXPTIME =              13501.5 / Total exposure time (seconds)",
-        );
+        let card =
+            CardImage::from("EXPTIME =              13501.5 / Total exposure time (seconds)");
         let header_key_value = card.to_header_key_value().unwrap();
         let value_comment = header_key_value.1.unwrap();
         assert_eq!(
@@ -852,38 +845,11 @@ mod tests {
                 assert_eq!(
                     &array.data[..30],
                     &vec![
-                        '\u{0}',
-                        '\u{0}',
-                        '\u{0}',
-                        '\u{0}',
-                        '\u{0}',
-                        '\u{0}',
-                        '\u{0}',
-                        '\u{0}',
-                        '\u{0}',
-                        '\u{0}',
-                        '\u{0}',
-                        '\u{0}',
-                        '\u{0}',
-                        '\u{0}',
-                        '\u{0}',
-                        '\u{0}',
-                        '\u{0}',
-                        '\u{0}',
-                        '\u{0}',
-                        '\u{80}',
-                        '\u{0}',
-                        'ÿ',
-                        'ÿ',
-                        'ÿ',
-                        'ÿ',
-                        '\u{0}',
-                        '\u{0}',
-                        '\u{0}',
-                        '\u{0}',
-                        '\u{0}',
-                    ]
-                        [..]
+                        '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}',
+                        '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}',
+                        '\u{0}', '\u{0}', '\u{0}', '\u{80}', '\u{0}', 'ÿ', 'ÿ', 'ÿ', 'ÿ',
+                        '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}',
+                    ][..]
                 );
             }
             _ => panic!("Should be Characters!"),
