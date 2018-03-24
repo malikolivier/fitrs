@@ -483,12 +483,12 @@ impl Hdu {
     }
 }
 
-static EQUAL_U8: u8 = '=' as u8;
-static SPACE_U8: u8 = ' ' as u8;
-static SLASH_U8: u8 = '/' as u8;
-static QUOTE_U8: u8 = '\'' as u8;
-static T_U8: u8 = 'T' as u8;
-static F_U8: u8 = 'F' as u8;
+const EQUAL_U8: u8 = '=' as u8;
+const SPACE_U8: u8 = ' ' as u8;
+const SLASH_U8: u8 = '/' as u8;
+const QUOTE_U8: u8 = '\'' as u8;
+const T_U8: u8 = 'T' as u8;
+const F_U8: u8 = 'F' as u8;
 
 impl HeaderValue {
     fn new(value: &[u8]) -> Option<HeaderValue> {
