@@ -1,10 +1,9 @@
-use std::cell::RefCell;
 use std::fs::File;
 use std::io::{Error, Read, Seek, SeekFrom};
 use std::ops::{Index, IndexMut};
 use std::result::Result;
 use std::str::{FromStr, from_utf8};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 
 use byteorder::{BigEndian, ReadBytesExt};
 
@@ -39,7 +38,8 @@ pub struct Hdu {
     header: Vec<(HeaderKeyWord, Option<HeaderValueComment>)>,
     data_start: u64,
     file: FileRc,
-    data: RefCell<Option<FitsData>>,
+    /// Cache of data inside Hdu
+    data: RwLock<Option<FitsData>>,
 }
 
 #[derive(Debug)]
@@ -299,7 +299,7 @@ trait IterableOverHdu: MovableCursor {
             header: header,
             data_start: data_start_position,
             file: self.file_rc().clone(),
-            data: RefCell::new(None),
+            data: RwLock::new(None),
         };
         hdu.data_byte_length().map(|len| {
             let mut next_position = data_start_position + (len as u64);
@@ -435,13 +435,16 @@ impl Hdu {
     }
 
     pub fn is_data_cached(&self) -> bool {
-        self.data.borrow().is_some()
+        self.data.read().unwrap().is_some()
     }
 
     pub fn data(&self) -> Option<&FitsData> {
-        let ptr = self.data.as_ptr();
-        let ptr = unsafe { &*ptr };
-        ptr.as_ref()
+        if let Some(ref data) = *self.data.read().unwrap() {
+            let data = data as *const FitsData;
+            Some(unsafe { &*data })
+        } else {
+            None
+        }
     }
 
     pub fn read_data(&self) -> &FitsData {
@@ -507,7 +510,10 @@ impl Hdu {
             })),
             _ => panic!("Unexpected value for BITPIX"),
         };
-        self.data.replace(Some(data));
+        let mut out = self.data.write().unwrap();
+        *out = Some(data);
+        // Release write-lock to be able to read and return back the data
+        drop(out);
         self.data().unwrap()
     }
 
