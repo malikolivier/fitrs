@@ -529,9 +529,11 @@ impl Hdu {
     {
         let naxis = self.naxis().expect("Get NAXIS");
         let length = naxis.iter().product();
+        let mut file_lock = self.file.lock().expect("Get file lock");
+        file_lock.seek(SeekFrom::Start(self.data_start)).expect("Set data position");
         FitsDataArray::new(
             &naxis,
-            read(&mut *self.file.lock().expect("Get file lock"), length),
+            read(&mut *file_lock, length),
         )
     }
 }
