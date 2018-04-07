@@ -118,6 +118,44 @@ impl Fits {
             hdu.read_data();
         }
     }
+
+    pub fn get(&self, index: usize) -> Option<&Hdu> {
+        for (i, hdu) in self.iter().enumerate() {
+            if i == index {
+                return Some(hdu);
+            }
+        }
+        None
+    }
+
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut Hdu> {
+        for (i, hdu) in self.iter_mut().enumerate() {
+            if i == index {
+                return Some(hdu);
+            }
+        }
+        None
+    }
+
+    pub fn get_by_name(&self, index: &str) -> Option<&Hdu> {
+        let value = Some(HeaderValue::CharacterString(String::from(index)));
+        for hdu in self.iter() {
+            if hdu.value("EXTNAME") == value.as_ref() {
+                return Some(hdu);
+            }
+        }
+        None
+    }
+
+    pub fn get_mut_by_name(&mut self, index: &str) -> Option<&mut Hdu> {
+        let value = Some(HeaderValue::CharacterString(String::from(index)));
+        for hdu in self.iter_mut() {
+            if hdu.value("EXTNAME") == value.as_ref() {
+                return Some(hdu);
+            }
+        }
+        None
+    }
 }
 
 impl Index<usize> for Fits {
