@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::fs::File;
 use std::io::{Error, Read, Seek, SeekFrom};
 use std::ops::{Index, IndexMut};
@@ -38,7 +39,7 @@ pub struct Hdu {
     header: Vec<(HeaderKeyWord, Option<HeaderValueComment>)>,
     data_start: u64,
     file: FileRc,
-    data: Option<FitsData>,
+    data: RefCell<Option<FitsData>>,
 }
 
 #[derive(Debug)]
@@ -298,7 +299,7 @@ trait IterableOverHdu: MovableCursor {
             header: header,
             data_start: data_start_position,
             file: self.file_rc().clone(),
-            data: None,
+            data: RefCell::new(None),
         };
         hdu.data_byte_length().map(|len| {
             let mut next_position = data_start_position + (len as u64);
@@ -434,22 +435,24 @@ impl Hdu {
     }
 
     pub fn is_data_cached(&self) -> bool {
-        self.data.is_some()
+        self.data.borrow().is_some()
     }
 
     pub fn data(&self) -> Option<&FitsData> {
-        self.data.as_ref()
+        let ptr = self.data.as_ptr();
+        let ptr = unsafe { &*ptr };
+        ptr.as_ref()
     }
 
-    pub fn read_data(&mut self) -> &FitsData {
+    pub fn read_data(&self) -> &FitsData {
         if self.is_data_cached() {
-            self.data.as_ref().unwrap()
+            self.data().unwrap()
         } else {
             self.read_data_force()
         }
     }
 
-    fn read_data_force(&mut self) -> &FitsData {
+    fn read_data_force(&self) -> &FitsData {
         let bitpix = self.value_as_integer_number("BITPIX")
             .expect("BITPIX is present");
         let data = match bitpix {
@@ -504,8 +507,8 @@ impl Hdu {
             })),
             _ => panic!("Unexpected value for BITPIX"),
         };
-        self.data = Some(data);
-        self.data.as_ref().unwrap()
+        self.data.replace(Some(data));
+        self.data().unwrap()
     }
 
     fn inner_read_data_force<F, T>(&self, read: F) -> FitsDataArray<T>
