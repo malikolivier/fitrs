@@ -222,17 +222,18 @@ trait MovableCursor {
     fn file(&self) -> MutexGuard<File>;
     fn position(&self) -> u64;
 
-    fn tell(&mut self) -> u64 {
-        self.file()
+    fn tell(file_lock: &mut MutexGuard<File>) -> u64 {
+        file_lock
             .seek(SeekFrom::Current(0))
             .expect("Could not get cursor position!")
     }
 
-    fn set_position(&mut self) {
+    fn set_position(&self) -> MutexGuard<File> {
         let position = self.position();
-        self.file()
-            .seek(SeekFrom::Start(position))
+        let mut lock = self.file();
+        lock.seek(SeekFrom::Start(position))
             .expect("Could not set position!");
+        lock
     }
 }
 
@@ -275,26 +276,31 @@ trait IterableOverHdu: MovableCursor {
     fn set_next_position(&mut self, position: u64);
 
     fn read_next_hdu(&mut self) -> Option<Hdu> {
-        self.set_position();
-        let mut line = CardImage::new();
-        let mut line_count = 0;
-        let mut header = Vec::new();
-        let mut end = false;
-        while (line_count % 36) != 0 || !end {
-            match self.file().read_exact(&mut line.0) {
-                Ok(_) => {
-                    line.to_header_key_value().map(|(key, val)| {
-                        if key == "END" {
-                            end = true;
-                        }
-                        header.push((key, val));
-                    });
-                }
-                Err(_) => return None,
-            };
-            line_count += 1;
-        }
-        let data_start_position = self.tell();
+        let (header, data_start_position) = {
+            // Get file lock
+            let mut file_lock = self.set_position();
+            let mut line = CardImage::new();
+            let mut line_count = 0;
+            let mut header = Vec::new();
+            let mut end = false;
+            while (line_count % 36) != 0 || !end {
+                match file_lock.read_exact(&mut line.0) {
+                    Ok(_) => {
+                        line.to_header_key_value().map(|(key, val)| {
+                            if key == "END" {
+                                end = true;
+                            }
+                            header.push((key, val));
+                        });
+                    }
+                    Err(_) => return None,
+                };
+                line_count += 1;
+            }
+            let data_start_position = Self::tell(&mut file_lock);
+            (header, data_start_position)
+        };
+        // Lock released
         let hdu = Hdu {
             header: header,
             data_start: data_start_position,
