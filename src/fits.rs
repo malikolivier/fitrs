@@ -508,7 +508,7 @@ impl Hdu {
         self.data.as_ref().unwrap()
     }
 
-    fn inner_read_data_force<F, T>(&mut self, read: F) -> FitsDataArray<T>
+    fn inner_read_data_force<F, T>(&self, read: F) -> FitsDataArray<T>
     where
         F: Fn(&mut File, usize) -> Vec<T>,
     {
