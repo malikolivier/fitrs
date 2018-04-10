@@ -9,4 +9,4 @@ See the tests for examples how to use.
 Cannot write FITS file (yet).
 
 The objective is to make a lib to manage FITS files in pure rust, with as few
-dependencies as possible.
+dependencies as possible, intelligent cache and multi-threading in mind.
