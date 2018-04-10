@@ -1,5 +1,10 @@
 //! Library to parse FITS file written in pure rust.
 //!
+//! Uses only one dependency, [byteorder](../byteorder), to deal with endianness.
+//!
+//! Uses intelligent cache to parse big FITS files. Developed for use in
+//! multi-threaded environments.
+//!
 //! # How to use
 //!
 //! ```rust,no_run
@@ -26,6 +31,10 @@
 //!     _ => { /* ... */ }
 //! }
 //! ```
+//!
+//! A lot of possibly desirable functionalities are still missing.
+//! PR are welcome.
+//! Support for writing FITS file is planned.
 
 extern crate byteorder;
 

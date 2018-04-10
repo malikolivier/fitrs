@@ -10,6 +10,9 @@ use byteorder::{BigEndian, ReadBytesExt};
 
 type FileRc = Arc<Mutex<File>>;
 
+/// Represent an open FITS file.
+///
+/// Implement caching. Thread-safe.
 #[derive(Debug)]
 pub struct Fits {
     file: FileRc,
@@ -17,6 +20,7 @@ pub struct Fits {
     total_hdu_count: RwLock<Option<usize>>,
 }
 
+/// We must release the Hdu cache!
 impl Drop for Fits {
     fn drop(&mut self) {
         use std::ptr;
@@ -25,23 +29,31 @@ impl Drop for Fits {
     }
 }
 
+/// An iterator over [`Hdu`]s. Obtained from a consumed [`Fits`] object.
 pub struct FitsIntoIter {
     fits: Fits,
     position: u64,
 }
 
+/// An iterator over references to [`Hdu`]s.
+///
+/// Use caching to avoid rereading the same data from file.
 pub struct FitsIter<'f> {
     fits: &'f Fits,
     position: u64,
     count: usize,
 }
 
+/// An iterator over mutable references to [`Hdu`]s.
+///
+/// Use caching to avoid rereading the same data from file.
 pub struct FitsIterMut<'f> {
     fits: &'f mut Fits,
     position: u64,
     count: usize,
 }
 
+/// Represent an HDU as defined in [FITS standard 4.1](https://archive.stsci.edu/fits/fits_standard/node13.html#SECTION00810000000000000000).
 #[derive(Debug)]
 pub struct Hdu {
     header: Vec<(HeaderKeyWord, Option<HeaderValueComment>)>,
@@ -51,6 +63,9 @@ pub struct Hdu {
     data: RwLock<Option<FitsData>>,
 }
 
+/// Represent a data array inside an [`Hdu`].
+///
+/// Follows data representation as defined in [FITS standard 6](https://archive.stsci.edu/fits/fits_standard/node42.html#SECTION001000000000000000000).
 #[derive(Debug)]
 pub enum FitsData {
     Characters(FitsDataArray<char>),
@@ -60,9 +75,15 @@ pub enum FitsData {
     FloatingPoint64(FitsDataArray<f64>),
 }
 
+/// Actual array data inside the [`Hdu`]
 #[derive(Debug)]
 pub struct FitsDataArray<T> {
+    /// Shape of array.
+    ///
+    /// Example: A 2D image of width `w` and height `h` will be stored here as
+    /// `[w, h]`.
     pub shape: Vec<usize>,
+    /// Raw data stored in the [`Hdu`].
     pub data: Vec<T>,
 }
 
@@ -83,6 +104,9 @@ struct HeaderValueComment {
     comment: Option<HeaderComment>,
 }
 
+/// Value stored inside the [`Hdu`] header.
+///
+/// As defined in [FITS standard 5.2](https://archive.stsci.edu/fits/fits_standard/node30.html#SECTION00920000000000000000).
 #[derive(PartialEq, Debug)]
 pub enum HeaderValue {
     CharacterString(String),
@@ -98,7 +122,7 @@ type HeaderComment = String;
 struct CardImage([u8; 80]);
 
 impl Fits {
-    /// Open FITS file given in provided path
+    /// Open FITS file given in provided path.
     pub fn open(path: &str) -> Result<Fits, Error> {
         File::open(path).map(|file| Fits {
             file: Arc::new(Mutex::new(file)),
@@ -107,6 +131,7 @@ impl Fits {
         })
     }
 
+    /// Iterate over references to [`Hdu`]s.
     pub fn iter(&self) -> FitsIter {
         FitsIter {
             fits: self,
@@ -115,6 +140,7 @@ impl Fits {
         }
     }
 
+    /// Iterate over mutable references to [`Hdu`]s.
     pub fn iter_mut(&mut self) -> FitsIterMut {
         FitsIterMut {
             fits: self,
@@ -123,12 +149,16 @@ impl Fits {
         }
     }
 
+    /// Force-read the whole FITS file and cache it.
+    ///
+    /// Beware of the size of the file you are loading before doing that.
     pub fn load_all(&self) {
         for hdu in self.iter() {
             hdu.read_data();
         }
     }
 
+    /// Get reference to [`Hdu`] by index. Use `0` for primary HDU.
     pub fn get(&self, index: usize) -> Option<&Hdu> {
         for (i, hdu) in self.iter().enumerate() {
             if i == index {
@@ -138,6 +168,7 @@ impl Fits {
         None
     }
 
+    /// Get mutable reference to [`Hdu`] by index. Use `0` for primary HDU.
     pub fn get_mut(&mut self, index: usize) -> Option<&mut Hdu> {
         for (i, hdu) in self.iter_mut().enumerate() {
             if i == index {
@@ -147,6 +178,7 @@ impl Fits {
         None
     }
 
+    /// Get reference to [`Hdu`] by `EXTNAME`. Defined in [FIST standard 5.4.2.6](https://archive.stsci.edu/fits/fits_standard/node40.html#SECTION00942000000000000000)
     pub fn get_by_name(&self, index: &str) -> Option<&Hdu> {
         let value = Some(HeaderValue::CharacterString(String::from(index)));
         for hdu in self.iter() {
@@ -157,6 +189,7 @@ impl Fits {
         None
     }
 
+    /// Get mutable reference to [`Hdu`] by `EXTNAME`. Defined in [FIST standard 5.4.2.6](https://archive.stsci.edu/fits/fits_standard/node40.html#SECTION00942000000000000000)
     pub fn get_mut_by_name(&mut self, index: &str) -> Option<&mut Hdu> {
         let value = Some(HeaderValue::CharacterString(String::from(index)));
         for hdu in self.iter_mut() {
@@ -172,8 +205,13 @@ impl Fits {
     }
 }
 
+///
 impl Index<usize> for Fits {
+    /// [`Hdu`] at index.
     type Output = Hdu;
+    /// Get [`Hdu`] by index. Panic if index is larger than the number of
+    /// [`Hdu`]s.
+    /// Prefer [`Fits::get`] if you need to check.
     fn index(&self, index: usize) -> &Self::Output {
         for (i, hdu) in self.iter().enumerate() {
             if i == index {
@@ -185,6 +223,9 @@ impl Index<usize> for Fits {
 }
 
 impl IndexMut<usize> for Fits {
+    /// Get mutable [`Hdu`] by index.
+    /// Panic if index is larger than the number of [`Hdu`]s.
+    /// Prefer [`Fits::get_mut`] if you need to check.
     fn index_mut(&mut self, index: usize) -> &mut Hdu {
         for (i, hdu) in self.iter_mut().enumerate() {
             if i == index {
@@ -195,8 +236,13 @@ impl IndexMut<usize> for Fits {
     }
 }
 
+///
 impl<'s> Index<&'s str> for Fits {
+    /// [`Hdu`] with provided `EXTNAME`.
     type Output = Hdu;
+    /// Get [`Hdu`] by `EXTNAME`.
+    /// Panic if `EXTNAME` is not found.
+    /// Prefer [`Fits::get_by_name`] if you need to check.
     fn index(&self, index: &str) -> &Self::Output {
         let value = Some(HeaderValue::CharacterString(String::from(index)));
         for hdu in self.iter() {
@@ -209,6 +255,9 @@ impl<'s> Index<&'s str> for Fits {
 }
 
 impl<'s> IndexMut<&'s str> for Fits {
+    /// Get mutable [`Hdu`] by `EXTNAME`.
+    /// Panic if `EXTNAME` is not found.
+    /// Prefer [`Fits::get_mut_by_name`] if you need to check.
     fn index_mut(&mut self, index: &str) -> &mut Self::Output {
         let value = Some(HeaderValue::CharacterString(String::from(index)));
         for hdu in self.iter_mut() {
@@ -220,6 +269,7 @@ impl<'s> IndexMut<&'s str> for Fits {
     }
 }
 
+///
 impl IntoIterator for Fits {
     type Item = Hdu;
     type IntoIter = FitsIntoIter;
@@ -403,6 +453,8 @@ impl<'f> Iterator for FitsIterMut<'f> {
 }
 
 impl Hdu {
+    /// Get [`HeaderValue`] by key. Return [`None`] if value is not found
+    /// in [`Hdu`].
     pub fn value(&self, key: &str) -> Option<&HeaderValue> {
         for line in self.header.iter() {
             if line.0 == key {
@@ -472,6 +524,7 @@ impl Hdu {
         }
     }
 
+    /// Get data array stored in the [`Hdu`].
     pub fn read_data(&self) -> &FitsData {
         if self.is_data_cached() {
             self.data().unwrap()
