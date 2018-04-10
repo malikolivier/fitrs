@@ -114,8 +114,8 @@ impl Fits {
         }
     }
 
-    pub fn load_all(&mut self) {
-        for hdu in self.iter_mut() {
+    pub fn load_all(&self) {
+        for hdu in self.iter() {
             hdu.read_data();
         }
     }
@@ -851,7 +851,7 @@ mod tests {
     fn make_primary_hdu_array() {
         let fits = Fits::open("test/testprog.fit").unwrap();
         let mut iter = fits.into_iter();
-        let mut primary_hdu = iter.next().unwrap();
+        let primary_hdu = iter.next().unwrap();
         let data = primary_hdu.read_data();
         match data {
             &FitsData::IntegersI32(ref array) => {
@@ -892,7 +892,7 @@ mod tests {
         let fits = Fits::open("test/testprog.fit").unwrap();
         let mut iter = fits.into_iter();
         iter.next();
-        let mut table_hdu_1 = iter.next().unwrap();
+        let table_hdu_1 = iter.next().unwrap();
         let data = table_hdu_1.read_data();
         match data {
             &FitsData::Characters(ref array) => {
@@ -1030,7 +1030,7 @@ mod tests {
 
     #[test]
     fn fits_load_all() {
-        let mut fits = Fits::open("/home/malik/workspace/lab/aflak/data/JCMT_CO32.FITS").unwrap();
+        let fits = Fits::open("/home/malik/workspace/lab/aflak/data/JCMT_CO32.FITS").unwrap();
         let tick = precise_time_ns();
         fits.load_all();
         assert_eq!(0.0, (precise_time_ns() - tick) as f64 / 1000_000.0);
