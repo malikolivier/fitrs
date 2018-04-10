@@ -167,7 +167,7 @@ impl Fits {
         None
     }
 
-    pub fn hdus_guard(&self) -> MutexGuard<AtomicPtr<Vec<Hdu>>> {
+    fn hdus_guard(&self) -> MutexGuard<AtomicPtr<Vec<Hdu>>> {
         self.hdus.lock().unwrap()
     }
 }
@@ -459,11 +459,11 @@ impl Hdu {
         })
     }
 
-    pub fn is_data_cached(&self) -> bool {
+    fn is_data_cached(&self) -> bool {
         self.data.read().unwrap().is_some()
     }
 
-    pub fn data(&self) -> Option<&FitsData> {
+    fn data(&self) -> Option<&FitsData> {
         if let Some(ref data) = *self.data.read().unwrap() {
             let data = data as *const FitsData;
             Some(unsafe { &*data })
