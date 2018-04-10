@@ -1,9 +1,9 @@
-use std::sync::atomic::{AtomicPtr, Ordering};
 use std::fs::File;
 use std::io::{Error, Read, Seek, SeekFrom};
 use std::ops::{Index, IndexMut};
 use std::result::Result;
 use std::str::{FromStr, from_utf8};
+use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 
 use byteorder::{BigEndian, ReadBytesExt};
@@ -16,7 +16,6 @@ pub struct Fits {
     hdus: Mutex<AtomicPtr<Vec<Hdu>>>,
     total_hdu_count: RwLock<Option<usize>>,
 }
-
 
 impl Drop for Fits {
     fn drop(&mut self) {
@@ -550,11 +549,10 @@ impl Hdu {
         let naxis = self.naxis().expect("Get NAXIS");
         let length = naxis.iter().product();
         let mut file_lock = self.file.lock().expect("Get file lock");
-        file_lock.seek(SeekFrom::Start(self.data_start)).expect("Set data position");
-        FitsDataArray::new(
-            &naxis,
-            read(&mut *file_lock, length),
-        )
+        file_lock
+            .seek(SeekFrom::Start(self.data_start))
+            .expect("Set data position");
+        FitsDataArray::new(&naxis, read(&mut *file_lock, length))
     }
 }
 
