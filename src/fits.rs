@@ -13,16 +13,16 @@ type FileRc = Arc<Mutex<File>>;
 #[derive(Debug)]
 pub struct Fits {
     file: FileRc,
-    hdus: AtomicPtr<Vec<Hdu>>,
+    hdus: Mutex<AtomicPtr<Vec<Hdu>>>,
     total_hdu_count: RwLock<Option<usize>>,
 }
+
 
 impl Drop for Fits {
     fn drop(&mut self) {
         use std::ptr;
-        let hdu_ptr = self.hdus.get_mut();
-        unsafe { ptr::drop_in_place(*hdu_ptr) };
-        unsafe { ptr::drop_in_place(&mut self.file)}
+        let hdu_ptr = self.hdus.get_mut().unwrap().load(Ordering::SeqCst);
+        unsafe { ptr::drop_in_place(hdu_ptr) };
     }
 }
 
@@ -103,7 +103,7 @@ impl Fits {
     pub fn open(path: &str) -> Result<Fits, Error> {
         File::open(path).map(|file| Fits {
             file: Arc::new(Mutex::new(file)),
-            hdus: AtomicPtr::new(Box::into_raw(Box::new(Vec::new()))),
+            hdus: Mutex::new(AtomicPtr::new(Box::into_raw(Box::new(Vec::new())))),
             total_hdu_count: RwLock::new(None),
         })
     }
@@ -166,6 +166,10 @@ impl Fits {
             }
         }
         None
+    }
+
+    pub fn hdus_guard(&self) -> MutexGuard<AtomicPtr<Vec<Hdu>>> {
+        self.hdus.lock().unwrap()
     }
 }
 
@@ -277,15 +281,17 @@ impl<'f> MovableCursor for FitsIterMut<'f> {
 impl Iterator for FitsIntoIter {
     type Item = Hdu;
     fn next(&mut self) -> Option<Self::Item> {
-        self.read_next_hdu()
+        self.read_next_hdu().map(|(hdu, next_position)| {
+            self.position = next_position;
+            hdu
+        })
     }
 }
 
 trait IterableOverHdu: MovableCursor {
     fn file_rc(&self) -> &FileRc;
-    fn set_next_position(&mut self, position: u64);
 
-    fn read_next_hdu(&mut self) -> Option<Hdu> {
+    fn read_next_hdu(&self) -> Option<(Hdu, u64)> {
         let (header, data_start_position) = {
             // Get file lock
             let mut file_lock = self.set_position();
@@ -317,15 +323,13 @@ trait IterableOverHdu: MovableCursor {
             file: self.file_rc().clone(),
             data: RwLock::new(None),
         };
-        hdu.data_byte_length().map(|len| {
-            let mut next_position = data_start_position + (len as u64);
-            /* Go to end of record */
-            while (next_position % (36 * 80)) != 0 {
-                next_position += 1;
-            }
-            self.set_next_position(next_position);
-        });
-        Some(hdu)
+        let len = hdu.data_byte_length().unwrap();
+        let mut next_position = data_start_position + (len as u64);
+        /* Compute next position to go to end of record */
+        while (next_position % (36 * 80)) != 0 {
+            next_position += 1;
+        }
+        Some((hdu, next_position))
     }
 }
 
@@ -333,26 +337,17 @@ impl<'f> IterableOverHdu for FitsIter<'f> {
     fn file_rc(&self) -> &FileRc {
         &self.fits.file
     }
-    fn set_next_position(&mut self, position: u64) {
-        self.position = position;
-    }
 }
 
 impl IterableOverHdu for FitsIntoIter {
     fn file_rc(&self) -> &FileRc {
         &self.fits.file
     }
-    fn set_next_position(&mut self, position: u64) {
-        self.position = position;
-    }
 }
 
 impl<'f> IterableOverHdu for FitsIterMut<'f> {
     fn file_rc(&self) -> &FileRc {
         &self.fits.file
-    }
-    fn set_next_position(&mut self, position: u64) {
-        self.position = position;
     }
 }
 
@@ -364,14 +359,15 @@ impl<'f> Iterator for FitsIter<'f> {
                 return None;
             }
         }
-        let hdu_ptr = self.fits.hdus.load(Ordering::SeqCst);
-        let hdus = unsafe { &mut *hdu_ptr };
+        let hdu_guard = self.fits.hdus_guard();
+        let hdus = unsafe { &mut *hdu_guard.load(Ordering::SeqCst) };
         if self.count < hdus.len() {
             self.count += 1;
             return Some(&hdus[self.count - 1]);
         }
-        if let Some(hdu) = self.read_next_hdu() {
+        if let Some((hdu, next_position)) = self.read_next_hdu() {
             self.count += 1;
+            self.position = next_position;
             hdus.push(hdu);
             hdus.last()
         } else {
@@ -389,14 +385,15 @@ impl<'f> Iterator for FitsIterMut<'f> {
                 return None;
             }
         }
-        let hdu_ptr = self.fits.hdus.load(Ordering::SeqCst);
-        let hdus = unsafe { &mut *hdu_ptr };
+        let hdu_guard = self.fits.hdus_guard();
+        let hdus = unsafe { &mut *hdu_guard.load(Ordering::SeqCst) };
         if self.count < hdus.len() {
             self.count += 1;
             return Some(&mut hdus[self.count - 1]);
         }
-        if let Some(hdu) = self.read_next_hdu() {
+        if let Some((hdu, next_position)) = self.read_next_hdu() {
             self.count += 1;
+            self.position = next_position;
             hdus.push(hdu);
             hdus.last_mut()
         } else {
