@@ -4,21 +4,21 @@ extern crate test;
 extern crate fitrs;
 use fitrs::Fits;
 
-const BIG_FITS_FILE: &str = "/home/malik/workspace/lab/aflak/data/JCMT_CO32.FITS";
+const FITS_FILE: &str = "test/testprog.fit";
 
 #[bench]
 fn fits_load_all(b: &mut test::Bencher) {
     b.iter(|| {
-        let fits = Fits::open(BIG_FITS_FILE).unwrap();
+        let fits = Fits::open(FITS_FILE).unwrap();
         fits.load_all();
-    })
+    });
 }
 
 #[bench]
 fn fits_load_all_from_cache(b: &mut test::Bencher) {
-    let fits = Fits::open(BIG_FITS_FILE).unwrap();
+    let fits = Fits::open(FITS_FILE).unwrap();
     fits.load_all();
     b.iter(|| {
         fits.load_all();
-    })
+    });
 }
