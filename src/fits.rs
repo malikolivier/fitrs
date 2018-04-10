@@ -1025,17 +1025,4 @@ mod tests {
         let fits = Fits::open("test/testprog.fit").unwrap();
         let _hdu2 = &fits["FOOBAR"];
     }
-
-    use time::precise_time_ns;
-
-    #[test]
-    fn fits_load_all() {
-        let fits = Fits::open("/home/malik/workspace/lab/aflak/data/JCMT_CO32.FITS").unwrap();
-        let tick = precise_time_ns();
-        fits.load_all();
-        assert_eq!(0.0, (precise_time_ns() - tick) as f64 / 1000_000.0);
-        let tick = precise_time_ns();
-        fits.load_all();
-        assert_eq!(0.0, (precise_time_ns() - tick) as f64 / 1000_000.0);
-    }
 }

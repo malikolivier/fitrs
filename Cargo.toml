@@ -5,6 +5,3 @@ authors = ["Malik Olivier Boussejra <malik@boussejra.com>"]
 
 [dependencies]
 byteorder = "1"
-
-[dev-dependencies]
-time = "0"
