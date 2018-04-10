@@ -14,6 +14,7 @@ type FileRc = Arc<Mutex<File>>;
 pub struct Fits {
     file: FileRc,
     hdus: AtomicPtr<Vec<Hdu>>,
+    total_hdu_count: RwLock<Option<usize>>,
 }
 
 impl Drop for Fits {
@@ -103,6 +104,7 @@ impl Fits {
         File::open(path).map(|file| Fits {
             file: Arc::new(Mutex::new(file)),
             hdus: AtomicPtr::new(Box::into_raw(Box::new(Vec::new()))),
+            total_hdu_count: RwLock::new(None),
         })
     }
 
@@ -357,6 +359,11 @@ impl<'f> IterableOverHdu for FitsIterMut<'f> {
 impl<'f> Iterator for FitsIter<'f> {
     type Item = &'f Hdu;
     fn next(&mut self) -> Option<&'f Hdu> {
+        if let Some(hdu_count) = *self.fits.total_hdu_count.read().unwrap() {
+            if self.count >= hdu_count {
+                return None;
+            }
+        }
         let hdu_ptr = self.fits.hdus.load(Ordering::SeqCst);
         let hdus = unsafe { &mut *hdu_ptr };
         if self.count < hdus.len() {
@@ -368,6 +375,7 @@ impl<'f> Iterator for FitsIter<'f> {
             hdus.push(hdu);
             hdus.last()
         } else {
+            *self.fits.total_hdu_count.write().unwrap() = Some(self.count);
             None
         }
     }
@@ -376,6 +384,11 @@ impl<'f> Iterator for FitsIter<'f> {
 impl<'f> Iterator for FitsIterMut<'f> {
     type Item = &'f mut Hdu;
     fn next(&mut self) -> Option<&'f mut Hdu> {
+        if let Some(hdu_count) = *self.fits.total_hdu_count.read().unwrap() {
+            if self.count >= hdu_count {
+                return None;
+            }
+        }
         let hdu_ptr = self.fits.hdus.load(Ordering::SeqCst);
         let hdus = unsafe { &mut *hdu_ptr };
         if self.count < hdus.len() {
@@ -387,6 +400,7 @@ impl<'f> Iterator for FitsIterMut<'f> {
             hdus.push(hdu);
             hdus.last_mut()
         } else {
+            *self.fits.total_hdu_count.write().unwrap() = Some(self.count);
             None
         }
     }
