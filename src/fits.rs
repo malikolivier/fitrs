@@ -1005,7 +1005,7 @@ mod tests {
     #[should_panic]
     fn index_overflow_over_fits() {
         let fits = Fits::open("test/testprog.fit").unwrap();
-        let hdu2 = &fits[10];
+        let _hdu2 = &fits[10];
     }
 
     #[test]
@@ -1023,7 +1023,7 @@ mod tests {
     #[should_panic]
     fn index_with_string_not_found_over_fits() {
         let fits = Fits::open("test/testprog.fit").unwrap();
-        let hdu2 = &fits["FOOBAR"];
+        let _hdu2 = &fits["FOOBAR"];
     }
 
     use time::precise_time_ns;
