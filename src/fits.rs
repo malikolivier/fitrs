@@ -3,7 +3,7 @@ use std::io::{Error, Read, Seek, SeekFrom};
 use std::ops::{Index, IndexMut};
 use std::path::Path;
 use std::result::Result;
-use std::str::{FromStr, from_utf8};
+use std::str::{from_utf8, FromStr};
 use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 
