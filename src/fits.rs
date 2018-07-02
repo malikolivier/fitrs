@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::{Error, Read, Seek, SeekFrom};
 use std::ops::{Index, IndexMut};
+use std::path::Path;
 use std::result::Result;
 use std::str::{FromStr, from_utf8};
 use std::sync::atomic::{AtomicPtr, Ordering};
@@ -123,7 +124,7 @@ struct CardImage([u8; 80]);
 
 impl Fits {
     /// Open FITS file given in provided path.
-    pub fn open(path: &str) -> Result<Fits, Error> {
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Fits, Error> {
         File::open(path).map(|file| Fits {
             file: Arc::new(Mutex::new(file)),
             hdus: Mutex::new(AtomicPtr::new(Box::into_raw(Box::new(Vec::new())))),
