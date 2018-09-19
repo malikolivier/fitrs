@@ -457,7 +457,7 @@ impl Hdu {
     /// Get [`HeaderValue`] by key. Return [`None`] if value is not found
     /// in [`Hdu`].
     pub fn value(&self, key: &str) -> Option<&HeaderValue> {
-        for line in self.header.iter() {
+        for line in &self.header {
             if line.0 == key {
                 return line
                     .1
