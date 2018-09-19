@@ -612,12 +612,12 @@ impl Hdu {
     }
 }
 
-const EQUAL_U8: u8 = '=' as u8;
-const SPACE_U8: u8 = ' ' as u8;
-const SLASH_U8: u8 = '/' as u8;
-const QUOTE_U8: u8 = '\'' as u8;
-const T_U8: u8 = 'T' as u8;
-const F_U8: u8 = 'F' as u8;
+const EQUAL_U8: u8 = b'=';
+const SPACE_U8: u8 = b' ';
+const SLASH_U8: u8 = b'/';
+const QUOTE_U8: u8 = b'\'';
+const T_U8: u8 = b'T';
+const F_U8: u8 = b'F';
 
 impl HeaderValue {
     fn new(value: &[u8]) -> Option<HeaderValue> {
