@@ -352,12 +352,12 @@ trait IterableOverHdu: MovableCursor {
             while (line_count % 36) != 0 || !end {
                 match file_lock.read_exact(&mut line.0) {
                     Ok(_) => {
-                        line.to_header_key_value().map(|(key, val)| {
+                        if let Some((key, val)) = line.to_header_key_value() {
                             if key == "END" {
                                 end = true;
                             }
                             header.push((key, val));
-                        });
+                        }
                     }
                     Err(_) => return None,
                 };
