@@ -469,8 +469,8 @@ impl Hdu {
     }
 
     fn value_as_integer_number(&self, key: &str) -> Option<i32> {
-        self.value(key).and_then(|val| match val {
-            &HeaderValue::IntegerNumber(n) => Some(n),
+        self.value(key).and_then(|val| match *val {
+            HeaderValue::IntegerNumber(n) => Some(n),
             _ => None,
         })
     }
