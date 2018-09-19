@@ -459,7 +459,8 @@ impl Hdu {
     pub fn value(&self, key: &str) -> Option<&HeaderValue> {
         for line in self.header.iter() {
             if line.0 == key {
-                return line.1
+                return line
+                    .1
                     .as_ref()
                     .and_then(|value_comment| value_comment.value.as_ref());
             }
@@ -535,7 +536,8 @@ impl Hdu {
     }
 
     fn read_data_force(&self) -> &FitsData {
-        let bitpix = self.value_as_integer_number("BITPIX")
+        let bitpix = self
+            .value_as_integer_number("BITPIX")
             .expect("BITPIX is present");
         let data = match bitpix {
             8 => FitsData::Characters(self.inner_read_data_force(|file, len| {
@@ -682,8 +684,7 @@ impl HeaderValue {
             .and_then(|string| {
                 let trimmed = string.trim();
                 i32::from_str_radix(trimmed, 10).ok()
-            })
-            .map(HeaderValue::IntegerNumber)
+            }).map(HeaderValue::IntegerNumber)
     }
 
     fn new_real_floating(value: &[u8]) -> Option<HeaderValue> {
@@ -692,8 +693,7 @@ impl HeaderValue {
             .and_then(|string| {
                 let trimmed = string.trim();
                 f64::from_str(trimmed).ok()
-            })
-            .map(HeaderValue::RealFloatingNumber)
+            }).map(HeaderValue::RealFloatingNumber)
     }
 }
 
