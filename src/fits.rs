@@ -368,7 +368,7 @@ trait IterableOverHdu: MovableCursor {
         };
         // Lock released
         let hdu = Hdu {
-            header: header,
+            header,
             data_start: data_start_position,
             file: self.file_rc().clone(),
             data: RwLock::new(None),
