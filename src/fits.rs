@@ -554,10 +554,10 @@ impl Hdu {
                     if blank.is_some() {
                         let blank = blank.unwrap() as i16;
                         buf.into_iter()
-                            .map(|n| if n == blank { None } else { Some(n as i32) })
+                            .map(|n| if n == blank { None } else { Some(i32::from(n)) })
                             .collect()
                     } else {
-                        buf.into_iter().map(|n| Some(n as i32)).collect()
+                        buf.into_iter().map(|n| Some(i32::from(n))).collect()
                     }
                 }))
             }
