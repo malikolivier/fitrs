@@ -883,12 +883,6 @@ mod tests {
     }
 
     #[test]
-    fn iterate_over_all_hdus() {
-        let fits = Fits::open("tests/testprog.fit").unwrap();
-        assert_eq!(fits.into_iter().count(), 8);
-    }
-
-    #[test]
     fn make_primary_hdu_array() {
         let fits = Fits::open("tests/testprog.fit").unwrap();
         let mut iter = fits.into_iter();

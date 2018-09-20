@@ -32,3 +32,9 @@ fn read_first_hdu() {
         Some(&HeaderValue::RealFloatingNumber(-1.3346E+01))
     );
 }
+
+#[test]
+fn iterate_over_all_hdus() {
+    let fits = Fits::open("tests/testprog.fit").unwrap();
+    assert_eq!(fits.into_iter().count(), 8);
+}
