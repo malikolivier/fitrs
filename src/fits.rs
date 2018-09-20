@@ -746,7 +746,7 @@ impl CardImage {
 
 #[cfg(test)]
 mod tests {
-    use super::{CardImage, Fits, FitsData, HeaderValue};
+    use super::{CardImage, Fits, HeaderValue};
 
     impl CardImage {
         fn from(s: &str) -> CardImage {
@@ -880,31 +880,6 @@ mod tests {
             hdu3.value("XTENSION").unwrap(),
             &HeaderValue::CharacterString(String::from("IMAGE"))
         );
-    }
-
-    #[test]
-    fn read_second_hdu_array() {
-        // TODO TableHDU are not handled yet
-        let fits = Fits::open("tests/testprog.fit").unwrap();
-        let mut iter = fits.into_iter();
-        iter.next();
-        let table_hdu_1 = iter.next().unwrap();
-        let data = table_hdu_1.read_data();
-        match data {
-            &FitsData::Characters(ref array) => {
-                assert_eq!(array.shape, vec![61, 20]);
-                assert_eq!(
-                    &array.data[..30],
-                    &vec![
-                        '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}',
-                        '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}',
-                        '\u{0}', '\u{0}', '\u{0}', '\u{80}', '\u{0}', 'ÿ', 'ÿ', 'ÿ', 'ÿ',
-                        '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}',
-                    ][..]
-                );
-            }
-            _ => panic!("Should be Characters!"),
-        }
     }
 
     #[test]
