@@ -3,6 +3,7 @@ use std::io::{Error, Read, Seek, SeekFrom};
 use std::mem;
 use std::ops::{Index, IndexMut};
 use std::path::Path;
+use std::ptr;
 use std::result::Result;
 use std::str::{from_utf8, FromStr};
 use std::sync::atomic::{AtomicPtr, Ordering};
@@ -206,6 +207,27 @@ impl Fits {
 
     fn hdus_guard(&self) -> MutexGuard<AtomicPtr<Vec<Hdu>>> {
         self.hdus.lock().unwrap()
+    }
+}
+
+impl Fits {
+    pub fn create<P: AsRef<Path>>(path: P, mut primary_hdu: Hdu) -> Result<Fits, Error> {
+        File::create(path).map(|file| {
+            let file_ptr = Arc::new(Mutex::new(file));
+
+            primary_hdu.data_start = 0;
+            unsafe {
+                let file_ptr_clone = file_ptr.clone();
+                ptr::write(&mut primary_hdu.file, file_ptr_clone);
+            }
+
+            let fits = Fits {
+                file: file_ptr,
+                hdus: Mutex::new(AtomicPtr::new(Box::into_raw(Box::new(vec![primary_hdu])))),
+                total_hdu_count: RwLock::new(Some(1)),
+            };
+            fits
+        })
     }
 }
 
