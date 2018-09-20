@@ -4,7 +4,7 @@ extern crate test;
 extern crate fitrs;
 use fitrs::Fits;
 
-const FITS_FILE: &str = "test/testprog.fit";
+const FITS_FILE: &str = "tests/testprog.fit";
 
 #[bench]
 fn fits_load_all(b: &mut test::Bencher) {

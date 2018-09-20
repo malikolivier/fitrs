@@ -856,7 +856,7 @@ mod tests {
 
     #[test]
     fn read_first_hdu() {
-        let fits = Fits::open("test/testprog.fit").unwrap();
+        let fits = Fits::open("tests/testprog.fit").unwrap();
         let mut iter = fits.into_iter();
         let hdu = iter.next().unwrap();
         assert_eq!(hdu.value("SIMPLE"), Some(&HeaderValue::Logical(true)));
@@ -887,7 +887,7 @@ mod tests {
 
     #[test]
     fn compute_hdu_data_byte_length() {
-        let fits = Fits::open("test/testprog.fit").unwrap();
+        let fits = Fits::open("tests/testprog.fit").unwrap();
         let mut iter = fits.into_iter();
         let primary_hdu = iter.next().unwrap();
         assert_eq!(primary_hdu.data_byte_length(), Some((32 / 8) * 10 * 2));
@@ -895,7 +895,7 @@ mod tests {
 
     #[test]
     fn iterate_over_hdu() {
-        let fits = Fits::open("test/testprog.fit").unwrap();
+        let fits = Fits::open("tests/testprog.fit").unwrap();
         let mut iter = fits.into_iter();
         let primary_hdu = iter.next().unwrap();
         assert_eq!(primary_hdu.header[0].0, "SIMPLE");
@@ -915,13 +915,13 @@ mod tests {
 
     #[test]
     fn iterate_over_all_hdus() {
-        let fits = Fits::open("test/testprog.fit").unwrap();
+        let fits = Fits::open("tests/testprog.fit").unwrap();
         assert_eq!(fits.into_iter().count(), 8);
     }
 
     #[test]
     fn make_primary_hdu_array() {
-        let fits = Fits::open("test/testprog.fit").unwrap();
+        let fits = Fits::open("tests/testprog.fit").unwrap();
         let mut iter = fits.into_iter();
         let primary_hdu = iter.next().unwrap();
         let data = primary_hdu.read_data();
@@ -961,7 +961,7 @@ mod tests {
     #[test]
     fn read_second_hdu_array() {
         // TODO TableHDU are not handled yet
-        let fits = Fits::open("test/testprog.fit").unwrap();
+        let fits = Fits::open("tests/testprog.fit").unwrap();
         let mut iter = fits.into_iter();
         iter.next();
         let table_hdu_1 = iter.next().unwrap();
@@ -985,7 +985,7 @@ mod tests {
 
     #[test]
     fn iterate_over_hdu_no_consume() {
-        let fits = Fits::open("test/testprog.fit").unwrap();
+        let fits = Fits::open("tests/testprog.fit").unwrap();
         let mut iter = fits.iter();
         let primary_hdu = iter.next().unwrap();
         assert_eq!(primary_hdu.header[0].0, "SIMPLE");
@@ -1005,7 +1005,7 @@ mod tests {
 
     #[test]
     fn iterate_over_hdu_mut() {
-        let mut fits = Fits::open("test/testprog.fit").unwrap();
+        let mut fits = Fits::open("tests/testprog.fit").unwrap();
         let mut iter = fits.iter_mut();
         let primary_hdu = iter.next().unwrap();
         assert_eq!(primary_hdu.header[0].0, "SIMPLE");
@@ -1025,7 +1025,7 @@ mod tests {
 
     #[test]
     fn iterate_over_hdu_mut_twice() {
-        let mut fits = Fits::open("test/testprog.fit").unwrap();
+        let mut fits = Fits::open("tests/testprog.fit").unwrap();
         {
             let mut iter = fits.iter_mut();
             let primary_hdu = iter.next().unwrap();
@@ -1064,7 +1064,7 @@ mod tests {
 
     #[test]
     fn index_over_fits() {
-        let fits = Fits::open("test/testprog.fit").unwrap();
+        let fits = Fits::open("tests/testprog.fit").unwrap();
         let hdu2 = &fits[1];
         assert_eq!(hdu2.header[0].0, "XTENSION");
         assert_eq!(
@@ -1076,13 +1076,13 @@ mod tests {
     #[test]
     #[should_panic]
     fn index_overflow_over_fits() {
-        let fits = Fits::open("test/testprog.fit").unwrap();
+        let fits = Fits::open("tests/testprog.fit").unwrap();
         let _hdu2 = &fits[10];
     }
 
     #[test]
     fn index_with_string_over_fits() {
-        let fits = Fits::open("test/testprog.fit").unwrap();
+        let fits = Fits::open("tests/testprog.fit").unwrap();
         let hdu2 = &fits["Test-ASCII"];
         assert_eq!(hdu2.header[0].0, "XTENSION");
         assert_eq!(
@@ -1094,7 +1094,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn index_with_string_not_found_over_fits() {
-        let fits = Fits::open("test/testprog.fit").unwrap();
+        let fits = Fits::open("tests/testprog.fit").unwrap();
         let _hdu2 = &fits["FOOBAR"];
     }
 }
