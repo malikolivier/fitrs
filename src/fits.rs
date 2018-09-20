@@ -1166,4 +1166,40 @@ mod tests {
         let fits = Fits::open("tests/testprog.fit").unwrap();
         let _hdu2 = &fits["FOOBAR"];
     }
+
+    #[test]
+    fn header_value_character_string_to_raw() {
+        let val = HeaderValue::CharacterString("Hey!".to_string());
+        assert_eq!(val.raw(), b"'Hey!'");
+    }
+
+    #[test]
+    fn header_value_escaped_character_string_to_raw() {
+        let val = HeaderValue::CharacterString("'Hey!'".to_string());
+        assert_eq!(val.raw(), b"'''Hey!'''");
+    }
+
+    #[test]
+    fn header_value_logical_to_raw() {
+        let val = HeaderValue::Logical(true);
+        assert_eq!(val.raw(), b"                   T");
+    }
+
+    #[test]
+    fn header_value_integer_number_to_raw() {
+        let val = HeaderValue::IntegerNumber(12);
+        assert_eq!(val.raw(), b"                  12");
+    }
+
+    #[test]
+    #[should_panic]
+    /// TODO: The implementation does not format floats as per the spec
+    fn header_value_real_floating_number_to_raw() {
+        let val = HeaderValue::RealFloatingNumber(15.1515151515152);
+        println!(
+            "{:?}",
+            val.raw().into_iter().map(|c| c as char).collect::<String>()
+        );
+        assert_eq!(val.raw(), b"1.51515151515152E+01");
+    }
 }
