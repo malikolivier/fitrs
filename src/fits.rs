@@ -9,7 +9,7 @@ use std::str::{from_utf8, FromStr};
 use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 
-use byteorder::{BigEndian, ReadBytesExt};
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use types::FitsDataType;
 
@@ -101,9 +101,69 @@ impl<T> FitsDataArray<T> {
     }
 }
 
+impl FitsDataArray<char> {
+    fn raw(&self) -> Vec<u8> {
+        unimplemented!("Cannot write Characters")
+    }
+}
+
+impl FitsDataArray<Option<i32>> {
+    fn raw(&self) -> Vec<u8> {
+        let mut data = Vec::with_capacity(4 * self.data.len());
+        for n in &self.data {
+            if let Some(n) = n {
+                data.write_i32::<BigEndian>(*n).unwrap();
+            } else {
+                unimplemented!("Missing value not implemented for 32-bit integer arrays!");
+            }
+        }
+        data
+    }
+}
+
+impl FitsDataArray<Option<u32>> {
+    fn raw(&self) -> Vec<u8> {
+        let mut data = Vec::with_capacity(4 * self.data.len());
+        for n in &self.data {
+            if let Some(n) = n {
+                data.write_u32::<BigEndian>(*n).unwrap();
+            } else {
+                unimplemented!("Missing value not implemented for unsigned 32-bit integer arrays!");
+            }
+        }
+        data
+    }
+}
+
+impl FitsDataArray<f32> {
+    fn raw(&self) -> Vec<u8> {
+        let mut data = Vec::with_capacity(4 * self.data.len());
+        for f in &self.data {
+            data.write_f32::<BigEndian>(*f).unwrap();
+        }
+        data
+    }
+}
+
+impl FitsDataArray<f64> {
+    fn raw(&self) -> Vec<u8> {
+        let mut data = Vec::with_capacity(8 * self.data.len());
+        for f in &self.data {
+            data.write_f64::<BigEndian>(*f).unwrap();
+        }
+        data
+    }
+}
+
 impl FitsData {
     fn raw(&self) -> Vec<u8> {
-        unimplemented!()
+        match self {
+            FitsData::Characters(chars) => chars.raw(),
+            FitsData::IntegersI32(arr) => arr.raw(),
+            FitsData::IntegersU32(arr) => arr.raw(),
+            FitsData::FloatingPoint32(arr) => arr.raw(),
+            FitsData::FloatingPoint64(arr) => arr.raw(),
+        }
     }
 }
 
