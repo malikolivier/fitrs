@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{Error, Read, Seek, SeekFrom};
+use std::io::{Error, Read, Seek, SeekFrom, Write};
 use std::mem;
 use std::ops::{Index, IndexMut};
 use std::path::Path;
@@ -98,6 +98,12 @@ impl<T> FitsDataArray<T> {
             shape: Vec::from(shape),
             data,
         }
+    }
+}
+
+impl FitsData {
+    fn raw(&self) -> Vec<u8> {
+        unimplemented!()
     }
 }
 
@@ -212,7 +218,7 @@ impl Fits {
 
 impl Fits {
     pub fn create<P: AsRef<Path>>(path: P, mut primary_hdu: Hdu) -> Result<Fits, Error> {
-        File::create(path).map(|file| {
+        File::create(path).and_then(|file| {
             let file_ptr = Arc::new(Mutex::new(file));
 
             primary_hdu.data_start = 0;
@@ -220,13 +226,13 @@ impl Fits {
                 let file_ptr_clone = file_ptr.clone();
                 ptr::write(&mut primary_hdu.file, file_ptr_clone);
             }
+            primary_hdu.write()?;
 
-            let fits = Fits {
+            Ok(Fits {
                 file: file_ptr,
                 hdus: Mutex::new(AtomicPtr::new(Box::into_raw(Box::new(vec![primary_hdu])))),
                 total_hdu_count: RwLock::new(Some(1)),
-            };
-            fits
+            })
         })
     }
 }
@@ -642,12 +648,30 @@ impl Hdu {
         unsafe {
             Hdu {
                 // TODO: Non empty header
-                header: vec![],
+                header: vec![("END".to_owned(), None)],
                 data_start: mem::uninitialized(),
                 file: mem::uninitialized(),
                 data: RwLock::new(Some(FitsDataType::new_fits_array(shape, data))),
             }
         }
+    }
+
+    fn write(&mut self) -> Result<(), Error> {
+        let mut file_lock = self.file.lock().expect("Get lock");
+        file_lock.seek(SeekFrom::Start(self.data_start))?;
+
+        for (key, value) in &self.header {
+            file_lock.write(CardImage::from_header_key_value(key, value).raw())?;
+        }
+        let padding = 36 - (self.header.len() % 36);
+        for _ in 0..padding {
+            file_lock.write(CardImage::EMPTY.raw())?;
+        }
+
+        if let Some(data) = self.data() {
+            file_lock.write(&data.raw())?;
+        }
+        Ok(())
     }
 }
 const EQUAL_U8: u8 = b'=';
@@ -735,6 +759,67 @@ impl HeaderValue {
     }
 }
 
+impl HeaderValue {
+    fn raw(&self) -> Vec<u8> {
+        let mut raw = Vec::with_capacity(32);
+        match self {
+            HeaderValue::CharacterString(string) => {
+                raw.push(QUOTE_U8);
+                for c in string.bytes() {
+                    if c == QUOTE_U8 {
+                        // Escape quote with another quote
+                        raw.push(QUOTE_U8);
+                        raw.push(QUOTE_U8);
+                    } else {
+                        raw.push(c);
+                    }
+                }
+                raw.push(QUOTE_U8);
+            }
+            HeaderValue::Logical(b) => {
+                for _ in 0..19 {
+                    raw.push(SPACE_U8);
+                }
+                raw.push(if *b { T_U8 } else { F_U8 });
+            }
+            HeaderValue::IntegerNumber(n) => {
+                for _ in 0..20 {
+                    raw.push(SPACE_U8);
+                }
+
+                let mut byte_iter = n.to_string().into_bytes().into_iter();
+                let mut i = 0;
+                while let Some(c) = byte_iter.next_back() {
+                    raw[19 - i] = c;
+                    i += 1;
+                }
+            }
+            HeaderValue::RealFloatingNumber(f) => {
+                for _ in 0..20 {
+                    raw.push(SPACE_U8);
+                }
+
+                // TODO: This formatter is not what we want
+                // what we want: 1.313131E+01
+                // what we have: 1.313131E1
+                let mut byte_iter = format!("{:E}", f).into_bytes().into_iter();
+                let mut i = 0;
+                while let Some(c) = byte_iter.next_back() {
+                    raw[19 - i] = c;
+                    i += 1;
+                }
+            }
+            HeaderValue::ComplexIntegerNumber(..) => {
+                unimplemented!("ComplexIntegerNumber not implemented")
+            }
+            HeaderValue::ComplexFloatingNumber(..) => {
+                unimplemented!("ComplexFloatingNumber not implemented")
+            }
+        }
+        raw
+    }
+}
+
 impl HeaderValueComment {
     fn new(value_comment: &[u8]) -> HeaderValueComment {
         let mut value_comment_iter = value_comment.split(|c| *c == SLASH_U8);
@@ -750,6 +835,31 @@ impl HeaderValueComment {
                 String::from(comment.trim())
             }),
         }
+    }
+}
+
+impl HeaderValueComment {
+    fn raw(&self) -> [u8; 70] {
+        let mut raw = [SPACE_U8; 70];
+        let offset = if let Some(value) = &self.value {
+            let value_raw = value.raw();
+            let value_raw_len = value_raw.len();
+            for (i, c) in value_raw.into_iter().enumerate() {
+                raw[i] = c;
+            }
+            raw[value_raw_len + 1] = SLASH_U8;
+            value_raw_len + 2
+        } else {
+            0
+        };
+
+        if let Some(comment) = &self.comment {
+            for (i, c) in comment.bytes().enumerate() {
+                raw[i + offset] = c;
+            }
+        };
+
+        raw
     }
 }
 
@@ -779,6 +889,28 @@ impl CardImage {
         } else {
             Some((key, None))
         }
+    }
+}
+
+impl CardImage {
+    const EMPTY: CardImage = CardImage([SPACE_U8; 80]);
+
+    fn raw(&self) -> &[u8] {
+        &self.0
+    }
+
+    fn from_header_key_value(key: &HeaderKeyWord, value: &Option<HeaderValueComment>) -> CardImage {
+        let mut raw = [SPACE_U8; 80];
+        for (i, c) in key.bytes().enumerate().take(8) {
+            raw[i] = c;
+        }
+        if let Some(value) = value {
+            raw[8] = EQUAL_U8;
+            for (i, c) in value.raw().into_iter().enumerate() {
+                raw[10 + i] = *c;
+            }
+        }
+        CardImage(raw)
     }
 }
 
