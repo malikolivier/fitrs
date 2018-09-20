@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::{Error, Read, Seek, SeekFrom};
+use std::mem;
 use std::ops::{Index, IndexMut};
 use std::path::Path;
 use std::result::Result;
@@ -8,6 +9,8 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 
 use byteorder::{BigEndian, ReadBytesExt};
+
+use types::FitsDataType;
 
 type FileRc = Arc<Mutex<File>>;
 
@@ -612,6 +615,19 @@ impl Hdu {
     }
 }
 
+impl Hdu {
+    pub fn new<T: FitsDataType>(shape: &[usize], data: Vec<T>) -> Hdu {
+        unsafe {
+            Hdu {
+                // TODO: Non empty header
+                header: vec![],
+                data_start: mem::uninitialized(),
+                file: mem::uninitialized(),
+                data: RwLock::new(Some(FitsDataType::new_fits_array(shape, data))),
+            }
+        }
+    }
+}
 const EQUAL_U8: u8 = b'=';
 const SPACE_U8: u8 = b' ';
 const SLASH_U8: u8 = b'/';
