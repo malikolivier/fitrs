@@ -883,45 +883,6 @@ mod tests {
     }
 
     #[test]
-    fn make_primary_hdu_array() {
-        let fits = Fits::open("tests/testprog.fit").unwrap();
-        let mut iter = fits.into_iter();
-        let primary_hdu = iter.next().unwrap();
-        let data = primary_hdu.read_data();
-        match data {
-            &FitsData::IntegersI32(ref array) => {
-                assert_eq!(array.shape, vec![10, 2]);
-                assert_eq!(
-                    array.data,
-                    vec![
-                        None,
-                        Some(2),
-                        Some(3),
-                        None,
-                        Some(5),
-                        Some(6),
-                        Some(7),
-                        None,
-                        Some(9),
-                        Some(10),
-                        Some(11),
-                        None,
-                        Some(13),
-                        Some(14),
-                        Some(15),
-                        None,
-                        Some(17),
-                        Some(18),
-                        Some(19),
-                        None,
-                    ]
-                );
-            }
-            _ => panic!("Should be IntegersI32!"),
-        }
-    }
-
-    #[test]
     fn read_second_hdu_array() {
         // TODO TableHDU are not handled yet
         let fits = Fits::open("tests/testprog.fit").unwrap();
