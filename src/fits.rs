@@ -708,7 +708,16 @@ impl Hdu {
         unsafe {
             Hdu {
                 // TODO: Non empty header
-                header: vec![("END".to_owned(), None)],
+                header: vec![
+                    (
+                        "SIMPLE".to_owned(),
+                        Some(HeaderValueComment {
+                            value: Some(HeaderValue::Logical(true)),
+                            comment: None,
+                        }),
+                    ),
+                    ("END".to_owned(), None),
+                ],
                 data_start: mem::uninitialized(),
                 file: mem::uninitialized(),
                 data: RwLock::new(Some(FitsDataType::new_fits_array(shape, data))),
