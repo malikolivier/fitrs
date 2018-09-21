@@ -756,15 +756,15 @@ impl Hdu {
         file_lock.seek(SeekFrom::Start(self.data_start))?;
 
         for (key, value) in &self.header {
-            file_lock.write(CardImage::from_header_key_value(key, value).raw())?;
+            file_lock.write_all(CardImage::from_header_key_value(key, value).raw())?;
         }
         let padding = 36 - (self.header.len() % 36);
         for _ in 0..padding {
-            file_lock.write(CardImage::EMPTY.raw())?;
+            file_lock.write_all(CardImage::EMPTY.raw())?;
         }
 
         if let Some(data) = self.data() {
-            file_lock.write(&data.raw())?;
+            file_lock.write_all(&data.raw())?;
         }
         Ok(())
     }
