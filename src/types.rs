@@ -2,6 +2,8 @@ use fits::{FitsData, FitsDataArray};
 
 pub trait FitsDataType: Sized {
     fn new_fits_array(shape: &[usize], data: Vec<Self>) -> FitsData;
+
+    fn bitpix() -> usize;
 }
 
 impl FitsDataType for char {
@@ -10,6 +12,10 @@ impl FitsDataType for char {
             shape: Vec::from(shape),
             data,
         })
+    }
+
+    fn bitpix() -> usize {
+        8
     }
 }
 
@@ -20,6 +26,10 @@ impl FitsDataType for i32 {
             data: data.into_iter().map(Some).collect(),
         })
     }
+
+    fn bitpix() -> usize {
+        32
+    }
 }
 
 impl FitsDataType for u32 {
@@ -29,6 +39,10 @@ impl FitsDataType for u32 {
             data: data.into_iter().map(Some).collect(),
         })
     }
+
+    fn bitpix() -> usize {
+        32
+    }
 }
 impl FitsDataType for f32 {
     fn new_fits_array(shape: &[usize], data: Vec<f32>) -> FitsData {
@@ -37,6 +51,10 @@ impl FitsDataType for f32 {
             data,
         })
     }
+
+    fn bitpix() -> usize {
+        32
+    }
 }
 impl FitsDataType for f64 {
     fn new_fits_array(shape: &[usize], data: Vec<f64>) -> FitsData {
@@ -44,5 +62,9 @@ impl FitsDataType for f64 {
             shape: Vec::from(shape),
             data,
         })
+    }
+
+    fn bitpix() -> usize {
+        64
     }
 }

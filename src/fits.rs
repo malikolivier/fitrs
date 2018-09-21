@@ -716,6 +716,13 @@ impl Hdu {
                             comment: None,
                         }),
                     ),
+                    (
+                        "BITPIX".to_owned(),
+                        Some(HeaderValueComment {
+                            value: Some(HeaderValue::IntegerNumber(T::bitpix() as i32)),
+                            comment: None,
+                        }),
+                    ),
                     ("END".to_owned(), None),
                 ],
                 data_start: mem::uninitialized(),
