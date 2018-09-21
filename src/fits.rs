@@ -764,7 +764,14 @@ impl Hdu {
         }
 
         if let Some(data) = self.data() {
-            file_lock.write_all(&data.raw())?;
+            let raw = data.raw();
+
+            file_lock.write_all(&raw)?;
+
+            const RECORD_SIZE: usize = 36 * 80;
+            let padding = RECORD_SIZE - (raw.len() % RECORD_SIZE);
+            let padding_data = vec![0u8; padding];
+            file_lock.write_all(&padding_data)?;
         }
         Ok(())
     }
