@@ -4,6 +4,10 @@ use fitrs::{Fits, Hdu};
 
 #[test]
 fn write_single_hdu_file() {
-    let primary_hdu = Hdu::new(&[10, 10], vec![0.0f32; 100]);
+    let data = (0..20)
+        .map(|i| (0..20).map(move |j| i + j))
+        .flatten()
+        .collect();
+    let primary_hdu = Hdu::new(&[20, 20], data);
     let mut _fits = Fits::create("out.fits", primary_hdu).expect("created!");
 }
