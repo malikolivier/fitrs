@@ -705,26 +705,27 @@ impl Hdu {
 
 impl Hdu {
     pub fn new<T: FitsDataType>(shape: &[usize], data: Vec<T>) -> Hdu {
+        // TODO: Non empty header
+        let mut header = Vec::with_capacity(4 + shape.len());
+        header.push((
+            "SIMPLE".to_owned(),
+            Some(HeaderValueComment {
+                value: Some(HeaderValue::Logical(true)),
+                comment: None,
+            }),
+        ));
+        header.push((
+            "BITPIX".to_owned(),
+            Some(HeaderValueComment {
+                value: Some(HeaderValue::IntegerNumber(T::bitpix() as i32)),
+                comment: None,
+            }),
+        ));
+        header.push(("END".to_owned(), None));
+
         unsafe {
             Hdu {
-                // TODO: Non empty header
-                header: vec![
-                    (
-                        "SIMPLE".to_owned(),
-                        Some(HeaderValueComment {
-                            value: Some(HeaderValue::Logical(true)),
-                            comment: None,
-                        }),
-                    ),
-                    (
-                        "BITPIX".to_owned(),
-                        Some(HeaderValueComment {
-                            value: Some(HeaderValue::IntegerNumber(T::bitpix() as i32)),
-                            comment: None,
-                        }),
-                    ),
-                    ("END".to_owned(), None),
-                ],
+                header,
                 data_start: mem::uninitialized(),
                 file: mem::uninitialized(),
                 data: RwLock::new(Some(FitsDataType::new_fits_array(shape, data))),
