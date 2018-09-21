@@ -994,7 +994,7 @@ impl CardImage {
         &self.0
     }
 
-    fn from_header_key_value(key: &HeaderKeyWord, value: &Option<HeaderValueComment>) -> CardImage {
+    fn from_header_key_value(key: &str, value: &Option<HeaderValueComment>) -> CardImage {
         let mut raw = [SPACE_U8; 80];
         for (i, c) in key.bytes().enumerate().take(8) {
             raw[i] = c;
