@@ -705,7 +705,6 @@ impl Hdu {
 
 impl Hdu {
     pub fn new<T: FitsDataType>(shape: &[usize], data: Vec<T>) -> Hdu {
-        // TODO: Non empty header
         let mut header = Vec::with_capacity(4 + shape.len());
         header.push((
             "SIMPLE".to_owned(),
@@ -721,6 +720,25 @@ impl Hdu {
                 comment: None,
             }),
         ));
+        header.push((
+            "NAXIS".to_owned(),
+            Some(HeaderValueComment {
+                value: Some(HeaderValue::IntegerNumber(shape.len() as i32)),
+                comment: None,
+            }),
+        ));
+        for (n, len) in shape.iter().enumerate() {
+            let key = format!("NAXIS{}", n + 1);
+
+            header.push((
+                key,
+                Some(HeaderValueComment {
+                    value: Some(HeaderValue::IntegerNumber(*len as i32)),
+                    comment: None,
+                }),
+            ));
+        }
+
         header.push(("END".to_owned(), None));
 
         unsafe {
