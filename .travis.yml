@@ -1,0 +1,42 @@
+dist: trusty
+language: rust
+rust:
+  - stable
+  - beta
+  - nightly
+  - 1.26.2
+os:
+  - linux
+cache: cargo
+
+addons:
+  apt:
+    packages:
+    - python3.5
+    - python-virtualenv
+
+before_install:
+  - virtualenv -p python3.5 verify/venv
+  - source ./verify/venv/bin/activate
+  - python --version
+  - pip install -r verify/requirements.txt
+  - pip freeze
+
+script:
+  - cargo build --all --verbose
+  - cargo test --all --verbose -- --test-threads=1
+
+jobs:
+  include:
+    - stage: fmt
+      install:
+        - rustup component add rustfmt-preview
+        - cargo fmt --version
+      script:
+        - cargo fmt --all -- --check
+    - stage: lint
+      install:
+        - rustup component add clippy-preview
+        - cargo clippy --version
+      script:
+        - cargo clippy --all-features -- -D warnings
