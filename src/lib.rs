@@ -43,3 +43,4 @@ mod types;
 
 pub use fits::{Fits, FitsData, FitsDataArray, Hdu, HeaderValue};
 pub use fits::{FitsIntoIter, FitsIter, FitsIterMut};
+pub use types::FitsDataType;

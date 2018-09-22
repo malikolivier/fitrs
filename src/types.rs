@@ -1,5 +1,6 @@
 use fits::{FitsData, FitsDataArray};
 
+/// A type that can be stored in a FITS data array implements this trait.
 pub trait FitsDataType: Sized {
     fn new_fits_array(shape: &[usize], data: Vec<Self>) -> FitsData;
 
