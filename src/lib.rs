@@ -36,8 +36,8 @@
 //!
 //! ## Write FITS
 //!
-//! The FITS files written by [`fitrs`] are verified by astropy.io.fits for
-//! standard compliance. If [`fits`] outputs a non-compliant FITS file, please
+//! The FITS files written by `fitrs` are verified by astropy.io.fits for
+//! standard compliance. If `fitrs` outputs a non-compliant FITS file, please
 //! file a bug.
 //!
 //! ```rust
