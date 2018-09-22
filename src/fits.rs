@@ -599,6 +599,7 @@ impl<'f> Iterator for FitsIterMut<'f> {
     }
 }
 
+/// # Read HDU
 impl Hdu {
     /// Get [`HeaderValue`] by key. Return [`None`] if value is not found
     /// in [`Hdu`].
@@ -758,7 +759,12 @@ impl Hdu {
     }
 }
 
+/// # Create HDU
 impl Hdu {
+    /// Create a new HDU with the shape and data given as parameters.
+    ///
+    /// The HDU must be added to a [`Fits`] object to be written persistently
+    /// to disk.
     pub fn new<T: FitsDataType>(shape: &[usize], data: Vec<T>) -> Hdu {
         let mut header = Vec::with_capacity(4 + shape.len());
         header.push((
