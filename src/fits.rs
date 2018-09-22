@@ -318,6 +318,8 @@ impl Fits {
         hdu.data_start = next_position;
         hdu.file = Some(self.file.clone());
 
+        // FITS standard 4.4.2: XTENSION keyword
+        //  https://archive.stsci.edu/fits/fits_standard/node20.html#SECTION00842000000000000000
         hdu.header[0] = (
             "XTENSION".to_owned(),
             Some(HeaderValueComment {
@@ -326,6 +328,9 @@ impl Fits {
             }),
         );
 
+        // FITS standard 8.2.1: For IMAGE extensions,
+        // PCOUNT shall be 0 and GCOUNT shall be 1.
+        // https://archive.stsci.edu/fits/fits_standard/node52.html#SECTION001111700000000000000
         let penultimate = hdu.header.len() - 1;
         hdu.header.insert(
             penultimate,
