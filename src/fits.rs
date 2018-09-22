@@ -290,6 +290,35 @@ impl Fits {
             })
         })
     }
+
+    pub fn push(&mut self, mut hdu: Hdu) -> Result<(), Error> {
+        let hdu_guard = self.hdus_guard();
+        let hdus = unsafe { &mut *hdu_guard.load(Ordering::SeqCst) };
+        let last_hdu = &hdus[hdus.len() - 1];
+
+        let mut header_len = last_hdu.header.len() as u64 * 80;
+        while (header_len % (36 * 80)) != 0 {
+            header_len += 1;
+        }
+        let data_len = last_hdu.data_byte_length().unwrap() as u64;
+
+        let mut next_position = last_hdu.data_start + header_len + data_len;
+        while (next_position % (36 * 80)) != 0 {
+            next_position += 1;
+        }
+        hdu.data_start = next_position;
+        hdu.file = Some(self.file.clone());
+
+        hdu.header[0] = (
+            "XTENSION".to_owned(),
+            Some(HeaderValueComment {
+                value: Some(HeaderValue::CharacterString("IMAGE".to_owned())),
+                comment: None,
+            }),
+        );
+
+        hdu.write()
+    }
 }
 
 ///
