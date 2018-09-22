@@ -190,8 +190,9 @@ type HeaderComment = String;
 
 struct CardImage([u8; 80]);
 
+/// # Read a FITS file
 impl Fits {
-    /// Open FITS file given in provided path.
+    /// Open FITS file given in provided path (read-only).
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Fits, Error> {
         File::open(path).map(|file| Fits {
             file: Arc::new(Mutex::new(file)),
@@ -274,7 +275,12 @@ impl Fits {
     }
 }
 
+/// # Create a FITS file
 impl Fits {
+    /// Creates a FITS file at the given path with the provided [`Hdu`] as
+    /// primary HDU.
+    ///
+    /// The file and its content are immediately written on disk.
     pub fn create<P: AsRef<Path>>(path: P, mut primary_hdu: Hdu) -> Result<Fits, Error> {
         File::create(path).and_then(|file| {
             let file_ptr = Arc::new(Mutex::new(file));
@@ -291,6 +297,9 @@ impl Fits {
         })
     }
 
+    /// Push an extension HDU and update the FITS file on disk.
+    ///
+    /// Currently defaults to creating an IMAGE HDU.
     pub fn push(&mut self, mut hdu: Hdu) -> Result<(), Error> {
         let hdu_guard = self.hdus_guard();
         let hdus = unsafe { &mut *hdu_guard.load(Ordering::SeqCst) };
