@@ -7,6 +7,8 @@
 //!
 //! # How to use
 //!
+//! ## Read FITS
+//!
 //! ```rust,no_run
 //! extern crate fitrs;
 //! use fitrs::{Fits, FitsData, FitsDataArray};
@@ -32,9 +34,28 @@
 //! }
 //! ```
 //!
+//! ## Write FITS
+//!
+//! The FITS files written by [`fitrs`] are verified by astropy.io.fits for
+//! standard compliance. If [`fits`] outputs a non-compliant FITS file, please
+//! file a bug.
+//!
+//! ```rust
+//! extern crate fitrs;
+//! use fitrs::{Fits, Hdu};
+//!
+//! // Make example dummy data array
+//! let shape = [20, 20];
+//! let data = (0..shape[0])
+//!     .map(|i| (0..shape[1]).map(move |j| i + j))
+//!     .flatten()
+//!     .collect();
+//! let primary_hdu = Hdu::new(&[20, 20], data);
+//! Fits::create("new_file.fits", primary_hdu).expect("Failed to create");
+//! ```
+//!
 //! A lot of possibly desirable functionalities are still missing.
 //! PR are welcome.
-//! Support for writing FITS file is planned.
 
 extern crate byteorder;
 

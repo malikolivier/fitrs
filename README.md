@@ -17,5 +17,4 @@ See the tests and benchmarks in the repository for more examples how to use.
 
 ## TODO
 
-- Being able to write FITS file.
 - Iterate over values in HDU header.
