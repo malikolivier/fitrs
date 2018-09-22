@@ -1,9 +1,7 @@
 use std::fs::File;
 use std::io::{Error, Read, Seek, SeekFrom, Write};
-use std::mem;
 use std::ops::{Index, IndexMut};
 use std::path::Path;
-use std::ptr;
 use std::result::Result;
 use std::str::{from_utf8, FromStr};
 use std::sync::atomic::{AtomicPtr, Ordering};
@@ -63,7 +61,7 @@ pub struct FitsIterMut<'f> {
 pub struct Hdu {
     header: Vec<(HeaderKeyWord, Option<HeaderValueComment>)>,
     data_start: u64,
-    file: FileRc,
+    file: Option<FileRc>,
     /// Cache of data inside Hdu
     data: RwLock<Option<FitsData>>,
 }
@@ -282,10 +280,7 @@ impl Fits {
             let file_ptr = Arc::new(Mutex::new(file));
 
             primary_hdu.data_start = 0;
-            unsafe {
-                let file_ptr_clone = file_ptr.clone();
-                ptr::write(&mut primary_hdu.file, file_ptr_clone);
-            }
+            primary_hdu.file = Some(file_ptr.clone());
             primary_hdu.write()?;
 
             Ok(Fits {
@@ -461,7 +456,7 @@ trait IterableOverHdu: MovableCursor {
         let hdu = Hdu {
             header,
             data_start: data_start_position,
-            file: self.file_rc().clone(),
+            file: Some(self.file_rc().clone()),
             data: RwLock::new(None),
         };
         let len = hdu.data_byte_length().unwrap();
@@ -695,7 +690,7 @@ impl Hdu {
     {
         let naxis = self.naxis().expect("Get NAXIS");
         let length = naxis.iter().product();
-        let mut file_lock = self.file.lock().expect("Get file lock");
+        let mut file_lock = self.file.as_ref().unwrap().lock().expect("Get file lock");
         file_lock
             .seek(SeekFrom::Start(self.data_start))
             .expect("Set data position");
@@ -741,18 +736,16 @@ impl Hdu {
 
         header.push(("END".to_owned(), None));
 
-        unsafe {
-            Hdu {
-                header,
-                data_start: mem::uninitialized(),
-                file: mem::uninitialized(),
-                data: RwLock::new(Some(FitsDataType::new_fits_array(shape, data))),
-            }
+        Hdu {
+            header,
+            data_start: 0,
+            file: None,
+            data: RwLock::new(Some(FitsDataType::new_fits_array(shape, data))),
         }
     }
 
     fn write(&mut self) -> Result<(), Error> {
-        let mut file_lock = self.file.lock().expect("Get lock");
+        let mut file_lock = self.file.as_ref().unwrap().lock().expect("Get lock");
         file_lock.seek(SeekFrom::Start(self.data_start))?;
 
         for (key, value) in &self.header {
