@@ -1,5 +1,9 @@
 # FITRS
 
+[![Build Status](https://travis-ci.org/malikolivier/fitrs.svg?branch=master)](https://travis-ci.org/malikolivier/fitrs)
+[![Latest release on crates.io](https://meritbadge.herokuapp.com/fitrs)](https://crates.io/crates/fitrs)
+[![Documentation on docs.rs](https://docs.rs/fitrs/badge.svg)](https://docs.rs/fitrs)
+
 **DISCLAIMER:** This lib is experimental and unstable.
 API changes will most probably occur.
 
@@ -11,7 +15,7 @@ dependencies as possible, intelligent cache and multi-threading in mind.
 
 ## Documentation
 
-You can refer to the [online doc](http://boussejra.com/rust-doc/fitrs/).
+You can refer to the [online doc](https://docs.rs/fitrs).
 
 See the tests and benchmarks in the repository for more examples how to use.
 
