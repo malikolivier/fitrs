@@ -317,6 +317,28 @@ impl Fits {
             }),
         );
 
+        let penultimate = hdu.header.len() - 1;
+        hdu.header.insert(
+            penultimate,
+            (
+                "PCOUNT".to_owned(),
+                Some(HeaderValueComment {
+                    value: Some(HeaderValue::IntegerNumber(0)),
+                    comment: None,
+                }),
+            ),
+        );
+        hdu.header.insert(
+            penultimate + 1,
+            (
+                "GCOUNT".to_owned(),
+                Some(HeaderValueComment {
+                    value: Some(HeaderValue::IntegerNumber(1)),
+                    comment: None,
+                }),
+            ),
+        );
+
         hdu.write()
     }
 }
