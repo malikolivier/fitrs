@@ -46,7 +46,7 @@ fn make_primary_hdu_array() {
     let primary_hdu = iter.next().unwrap();
     let data = primary_hdu.read_data();
     match data {
-        &FitsData::IntegersI32(ref array) => {
+        FitsData::IntegersI32(array) => {
             assert_eq!(array.shape, vec![10, 2]);
             assert_eq!(
                 array.data,
@@ -87,7 +87,7 @@ fn read_second_hdu_array() {
     let table_hdu_1 = iter.next().unwrap();
     let data = table_hdu_1.read_data();
     match data {
-        &FitsData::Characters(ref array) => {
+        FitsData::Characters(array) => {
             assert_eq!(array.shape, vec![61, 20]);
             assert_eq!(
                 &array.data[..30],
