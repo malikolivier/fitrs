@@ -4,7 +4,7 @@ use fits::{FitsData, FitsDataArray};
 pub trait FitsDataType: Sized {
     fn new_fits_array(shape: &[usize], data: Vec<Self>) -> FitsData;
 
-    fn bitpix() -> usize;
+    fn bitpix() -> i32;
 }
 
 impl FitsDataType for char {
@@ -15,7 +15,7 @@ impl FitsDataType for char {
         })
     }
 
-    fn bitpix() -> usize {
+    fn bitpix() -> i32 {
         8
     }
 }
@@ -28,7 +28,7 @@ impl FitsDataType for i32 {
         })
     }
 
-    fn bitpix() -> usize {
+    fn bitpix() -> i32 {
         32
     }
 }
@@ -41,7 +41,7 @@ impl FitsDataType for u32 {
         })
     }
 
-    fn bitpix() -> usize {
+    fn bitpix() -> i32 {
         32
     }
 }
@@ -53,8 +53,8 @@ impl FitsDataType for f32 {
         })
     }
 
-    fn bitpix() -> usize {
-        32
+    fn bitpix() -> i32 {
+        -32
     }
 }
 impl FitsDataType for f64 {
@@ -65,7 +65,7 @@ impl FitsDataType for f64 {
         })
     }
 
-    fn bitpix() -> usize {
-        64
+    fn bitpix() -> i32 {
+        -64
     }
 }
