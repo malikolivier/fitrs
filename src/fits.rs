@@ -986,9 +986,89 @@ impl HeaderValue {
     }
 }
 
+#[derive(Debug)]
+struct ValueCommentSplit<'a> {
+    buf: &'a [u8],
+    i: usize,
+    state: ValueCommentParseState,
+}
+impl<'a> ValueCommentSplit<'a> {
+    fn new(buf: &'a [u8]) -> Self {
+        Self {
+            buf,
+            i: 0,
+            state: ValueCommentParseState::Start,
+        }
+    }
+}
+
+#[derive(Debug)]
+enum ValueCommentParseState {
+    Start,
+    LookForComment,
+    ValueReturned,
+    CommentReturned,
+    InsideString,
+    EscapeChar,
+}
+
+impl<'a> Iterator for ValueCommentSplit<'a> {
+    type Item = &'a [u8];
+
+    fn next(&mut self) -> Option<Self::Item> {
+        use self::ValueCommentParseState::*;
+
+        loop {
+            let c = self.buf.get(self.i);
+            self.i += 1;
+            match self.state {
+                Start => {
+                    if c == Some(&QUOTE_U8) {
+                        self.state = InsideString;
+                    } else {
+                        self.state = LookForComment;
+                    }
+                }
+                LookForComment => {
+                    if c == Some(&SLASH_U8) {
+                        self.state = ValueReturned;
+                        return Some(&self.buf[..(self.i - 1)]);
+                    } else if c == None {
+                        self.state = ValueReturned;
+                        return Some(self.buf);
+                    }
+                }
+                ValueReturned => {
+                    if c == None {
+                        return None;
+                    } else {
+                        self.state = CommentReturned;
+                        return Some(&self.buf[self.i..]);
+                    }
+                }
+                CommentReturned => return None,
+                InsideString => {
+                    if c == Some(&QUOTE_U8) {
+                        self.state = EscapeChar;
+                    } else if c == None {
+                        self.state = LookForComment;
+                    }
+                }
+                EscapeChar => {
+                    if c == Some(&QUOTE_U8) {
+                        self.state = InsideString;
+                    } else {
+                        self.state = LookForComment;
+                    }
+                }
+            }
+        }
+    }
+}
+
 impl HeaderValueComment {
     fn new(value_comment: &[u8]) -> HeaderValueComment {
-        let mut value_comment_iter = value_comment.split(|c| *c == SLASH_U8);
+        let mut value_comment_iter = ValueCommentSplit::new(value_comment);
         let value_slice = value_comment_iter.next();
         let comment_slice = value_comment_iter.next();
         HeaderValueComment {
@@ -1140,6 +1220,21 @@ mod tests {
         assert_eq!(
             value_comment.value,
             Some(HeaderValue::CharacterString(String::from(" ")))
+        );
+    }
+
+    #[test]
+    fn read_card_image_character_intermediary_slash() {
+        let card = CardImage::from(
+            "BUNIT   = '1E-17 erg/s/cm^2/Ang/spaxel' / Specific intensity (per spaxel)       ",
+        );
+        let header_key_value = card.to_header_key_value().unwrap();
+        let value_comment = header_key_value.1.unwrap();
+        assert_eq!(
+            value_comment.value,
+            Some(HeaderValue::CharacterString(String::from(
+                "1E-17 erg/s/cm^2/Ang/spaxel"
+            )))
         );
     }
 
