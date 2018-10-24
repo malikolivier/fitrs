@@ -1043,7 +1043,7 @@ impl<'a> Iterator for ValueCommentSplit<'a> {
                         return None;
                     } else {
                         self.state = CommentReturned;
-                        return Some(&self.buf[self.i..]);
+                        return Some(&self.buf[(self.i - 1)..]);
                     }
                 }
                 CommentReturned => return None,
@@ -1282,6 +1282,21 @@ mod tests {
         assert_eq!(
             value_comment.value,
             Some(HeaderValue::RealFloatingNumber(-1.666667E-03))
+        );
+    }
+
+    #[test]
+    fn read_card_image_character_comments() {
+        let card = CardImage::from("CRPIX1  =              38.0000 /Reference pixel (1-indexed)");
+        let header_key_value = card.to_header_key_value().unwrap();
+        let value_comment = header_key_value.1.unwrap();
+        assert_eq!(
+            value_comment.value,
+            Some(HeaderValue::RealFloatingNumber(38.0))
+        );
+        assert_eq!(
+            value_comment.comment.unwrap(),
+            "Reference pixel (1-indexed)"
         );
     }
 
