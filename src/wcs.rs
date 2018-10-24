@@ -74,4 +74,13 @@ impl WCS {
         }
         pixel
     }
+
+    pub fn slice(self, indices: &[usize]) -> Self {
+        let mut out = self;
+        out.size = indices.len();
+        for (i, idx) in indices.iter().enumerate() {
+            out.coefs[i] = self.coefs[*idx];
+        }
+        out
+    }
 }
