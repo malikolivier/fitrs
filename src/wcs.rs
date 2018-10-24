@@ -2,13 +2,13 @@ use fits::{Hdu, HeaderValue};
 
 const MAX_DIM: usize = 3;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug, Default)]
 pub struct WCS {
     coefs: [CoordCoefs; MAX_DIM],
     size: usize,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug, Default)]
 struct CoordCoefs {
     crpix: f32,
     crval: f32,
