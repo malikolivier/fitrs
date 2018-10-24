@@ -61,7 +61,9 @@ extern crate byteorder;
 
 mod fits;
 mod types;
+mod wcs;
 
 pub use fits::{Fits, FitsData, FitsDataArray, Hdu, HeaderValue};
 pub use fits::{FitsIntoIter, FitsIter, FitsIterMut};
 pub use types::FitsDataType;
+pub use wcs::WCS;
