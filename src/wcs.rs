@@ -80,6 +80,7 @@ impl WCS {
         out.size = indices.len();
         for (i, idx) in indices.iter().enumerate() {
             out.coefs[i] = self.coefs[*idx];
+            out.coefs[i].cds[i] = self.coefs[*idx].cds[*idx];
         }
         out
     }
