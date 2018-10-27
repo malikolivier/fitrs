@@ -630,7 +630,7 @@ impl Hdu {
     fn naxis(&self) -> Option<Vec<usize>> {
         self.value_as_integer_number("NAXIS").and_then(|naxis| {
             let mut vec = Vec::new();
-            for i in 1..(naxis + 1) {
+            for i in 1..=naxis {
                 let mut key = String::from("NAXIS");
                 key.push_str(&i.to_string());
                 match self.value_as_integer_number(&key) {
