@@ -72,4 +72,16 @@ impl WCS {
         }
         out
     }
+
+    pub fn transform(self, index: usize, pix: f32, factor: f32) -> Self {
+        let mut out = self;
+        {
+            let coef = &mut out.coefs[index];
+            let orig_coef = &self.coefs[index];
+            coef.crpix = 0.0;
+            coef.crval = orig_coef.crval + (pix - orig_coef.crpix) * orig_coef.cd;
+            coef.cd = orig_coef.cd * factor;
+        }
+        out
+    }
 }
