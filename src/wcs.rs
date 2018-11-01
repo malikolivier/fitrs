@@ -2,6 +2,9 @@ use fits::{Hdu, HeaderValue};
 
 const MAX_DIM: usize = 3;
 
+/// World Coordinates
+///
+/// The implementation of this structure is *experimental*.
 #[derive(Copy, Clone, PartialEq, Debug, Default)]
 pub struct WCS {
     coefs: [CoordCoefs; MAX_DIM],
@@ -16,6 +19,7 @@ struct CoordCoefs {
 }
 
 impl WCS {
+    /// Read how to convert pixel to real world coordinates from HDU header.
     pub fn new(hdu: &Hdu) -> Self {
         fn get_number(hdu: &Hdu, key: &str) -> Option<f32> {
             match hdu.value(key) {
