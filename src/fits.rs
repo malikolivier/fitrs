@@ -433,6 +433,14 @@ impl IntoIterator for Fits {
     }
 }
 
+impl<'a> IntoIterator for &'a Fits {
+    type Item = <FitsIter<'a> as Iterator>::Item;
+    type IntoIter = FitsIter<'a>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
 trait MovableCursor {
     fn file(&self) -> MutexGuard<File>;
     fn position(&self) -> u64;
