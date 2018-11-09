@@ -18,7 +18,3 @@ dependencies as possible, intelligent cache and multi-threading in mind.
 You can refer to the [online doc](https://docs.rs/fitrs).
 
 See the tests and benchmarks in the repository for more examples how to use.
-
-## TODO
-
-- Iterate over values in HDU header.
