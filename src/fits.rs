@@ -3,6 +3,7 @@ use std::io::{Error, Read, Seek, SeekFrom, Write};
 use std::ops::{Index, IndexMut};
 use std::path::Path;
 use std::result::Result;
+use std::slice;
 use std::str::{from_utf8, FromStr};
 use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, RwLock};
@@ -769,6 +770,43 @@ impl Hdu {
             .seek(SeekFrom::Start(self.data_start))
             .expect("Set data position");
         FitsDataArray::new(&naxis, read(&mut *file_lock, length))
+    }
+}
+
+/// Iterator over the header of an HDU
+pub struct HduIter<'a> {
+    iter: slice::Iter<'a, (HeaderKeyWord, Option<HeaderValueComment>)>,
+}
+
+/// # Iterate over HeaderValue in HDU
+impl Hdu {
+    pub fn iter(&self) -> HduIter {
+        HduIter {
+            iter: self.header.iter(),
+        }
+    }
+}
+
+impl<'a> IntoIterator for &'a Hdu {
+    type Item = <HduIter<'a> as Iterator>::Item;
+    type IntoIter = HduIter<'a>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl<'a> Iterator for HduIter<'a> {
+    type Item = (&'a HeaderKeyWord, Option<&'a HeaderValue>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|(key, value_comment)| {
+            (
+                key,
+                value_comment
+                    .as_ref()
+                    .and_then(|value_comment| value_comment.value.as_ref()),
+            )
+        })
     }
 }
 
