@@ -558,7 +558,7 @@ trait IterableOverHdu: MovableCursor {
                                         None,
                                     )
                                 }
-                                ParsedCardImage::Continue(ParsedHeaderValueComment::Completed(
+                                ParsedCardImage::Continue(ParsedHeaderValueComment::Full(
                                     header_value_comment,
                                 )) => {
                                     let HeaderValueComment { value, comment } =
@@ -1021,9 +1021,7 @@ impl HeaderValue {
             s.truncate(new_len);
             Some(ParsedHeaderValue::PartialMultiLine(s))
         } else {
-            Some(ParsedHeaderValue::Completed(HeaderValue::CharacterString(
-                s,
-            )))
+            Some(ParsedHeaderValue::Full(HeaderValue::CharacterString(s)))
         }
     }
 
@@ -1043,7 +1041,7 @@ impl HeaderValue {
                 return None;
             }
         }
-        Some(HeaderValue::Logical(b)).map(ParsedHeaderValue::Completed)
+        Some(HeaderValue::Logical(b)).map(ParsedHeaderValue::Full)
     }
 
     fn new_integer(value: &[u8]) -> Option<ParsedHeaderValue> {
@@ -1053,7 +1051,7 @@ impl HeaderValue {
                 let trimmed = string.trim();
                 i32::from_str_radix(trimmed, 10).ok()
             }).map(HeaderValue::IntegerNumber)
-            .map(ParsedHeaderValue::Completed)
+            .map(ParsedHeaderValue::Full)
     }
 
     fn new_real_floating(value: &[u8]) -> Option<ParsedHeaderValue> {
@@ -1063,12 +1061,12 @@ impl HeaderValue {
                 let trimmed = string.trim();
                 f64::from_str(trimmed).ok()
             }).map(HeaderValue::RealFloatingNumber)
-            .map(ParsedHeaderValue::Completed)
+            .map(ParsedHeaderValue::Full)
     }
 }
 
 enum ParsedHeaderValue {
-    Completed(HeaderValue),
+    Full(HeaderValue),
     PartialMultiLine(String),
 }
 
@@ -1230,8 +1228,8 @@ impl HeaderValueComment {
         if let Some(value_slice) = value_slice {
             let parsed_value = HeaderValue::parse(value_slice);
             match parsed_value {
-                Some(ParsedHeaderValue::Completed(value)) => {
-                    ParsedHeaderValueComment::Completed(HeaderValueComment {
+                Some(ParsedHeaderValue::Full(value)) => {
+                    ParsedHeaderValueComment::Full(HeaderValueComment {
                         value: Some(value),
                         comment,
                     })
@@ -1239,13 +1237,13 @@ impl HeaderValueComment {
                 Some(ParsedHeaderValue::PartialMultiLine(partial)) => {
                     ParsedHeaderValueComment::PartialMultiLine(partial)
                 }
-                None => ParsedHeaderValueComment::Completed(HeaderValueComment {
+                None => ParsedHeaderValueComment::Full(HeaderValueComment {
                     value: None,
                     comment,
                 }),
             }
         } else {
-            ParsedHeaderValueComment::Completed(HeaderValueComment {
+            ParsedHeaderValueComment::Full(HeaderValueComment {
                 value: None,
                 comment,
             })
@@ -1254,7 +1252,7 @@ impl HeaderValueComment {
 }
 
 enum ParsedHeaderValueComment {
-    Completed(HeaderValueComment),
+    Full(HeaderValueComment),
     PartialMultiLine(String),
 }
 
@@ -1305,9 +1303,7 @@ impl CardImage {
         }
         if value_indicator[0] == EQUAL_U8 && value_indicator[1] == SPACE_U8 {
             match HeaderValueComment::parse(value_comment) {
-                ParsedHeaderValueComment::Completed(val) => {
-                    ParsedCardImage::Finished(key, Some(val))
-                }
+                ParsedHeaderValueComment::Full(val) => ParsedCardImage::Finished(key, Some(val)),
                 ParsedHeaderValueComment::PartialMultiLine(s) => {
                     ParsedCardImage::PartialMultiLine(key, s)
                 }
