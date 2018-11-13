@@ -1072,6 +1072,8 @@ enum ParsedHeaderValue {
 
 impl HeaderValue {
     fn raw(&self) -> Vec<u8> {
+        use scifmt::SciFmt;
+
         let mut raw = Vec::with_capacity(32);
         match self {
             HeaderValue::CharacterString(string) => {
@@ -1110,10 +1112,7 @@ impl HeaderValue {
                     raw.push(SPACE_U8);
                 }
 
-                // TODO: This formatter is not what we want
-                // what we want: 1.313131E+01
-                // what we have: 1.313131E1
-                let mut byte_iter = format!("{:E}", f).into_bytes().into_iter();
+                let mut byte_iter = f.sci_fmt().into_bytes().into_iter();
                 let mut i = 0;
                 while let Some(c) = byte_iter.next_back() {
                     raw[19 - i] = c;
