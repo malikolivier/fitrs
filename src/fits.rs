@@ -503,20 +503,106 @@ trait IterableOverHdu: MovableCursor {
 
     fn read_next_hdu(&self) -> Option<(Hdu, u64)> {
         let (header, data_start_position) = {
+            #[derive(PartialEq)]
+            enum HeaderParseState {
+                ParsingSingleLine,
+                ParsingMultiLine(HeaderKeyWord, Vec<String>),
+                End,
+            }
+
+            impl HeaderParseState {
+                fn init() -> Self {
+                    HeaderParseState::ParsingSingleLine
+                }
+                fn bump(
+                    self,
+                    image: ParsedCardImage,
+                ) -> (
+                    HeaderParseState,
+                    Option<(HeaderKeyWord, Option<HeaderValueComment>)>,
+                ) {
+                    match self {
+                        HeaderParseState::ParsingSingleLine => match image {
+                            ParsedCardImage::Finished(key, val) => {
+                                (HeaderParseState::ParsingSingleLine, Some((key, val)))
+                            }
+                            ParsedCardImage::End => {
+                                (HeaderParseState::End, Some(("END".to_owned(), None)))
+                            }
+                            ParsedCardImage::PartialMultiLine(key, partial) => {
+                                (HeaderParseState::ParsingMultiLine(key, vec![partial]), None)
+                            }
+                            _ => (HeaderParseState::ParsingSingleLine, None),
+                        },
+                        HeaderParseState::ParsingMultiLine(previous_key, mut partials) => {
+                            match image {
+                                ParsedCardImage::Finished(key, val) => {
+                                    (HeaderParseState::ParsingSingleLine, Some((key, val)))
+                                }
+                                ParsedCardImage::End => {
+                                    (HeaderParseState::End, Some(("END".to_owned(), None)))
+                                }
+                                ParsedCardImage::PartialMultiLine(_, partial) => {
+                                    partials.push(partial);
+                                    (
+                                        HeaderParseState::ParsingMultiLine(previous_key, partials),
+                                        None,
+                                    )
+                                }
+                                ParsedCardImage::Continue(
+                                    ValueCommentParseResult::PartialMultiLine(partial),
+                                ) => {
+                                    partials.push(partial);
+                                    (
+                                        HeaderParseState::ParsingMultiLine(previous_key, partials),
+                                        None,
+                                    )
+                                }
+                                ParsedCardImage::Continue(ValueCommentParseResult::Completed(
+                                    header_value_comment,
+                                )) => {
+                                    let HeaderValueComment { value, comment } =
+                                        header_value_comment;
+                                    if let Some(HeaderValue::CharacterString(s)) = value {
+                                        partials.push(s);
+                                    }
+                                    (
+                                        HeaderParseState::ParsingSingleLine,
+                                        Some((
+                                            previous_key,
+                                            Some(HeaderValueComment {
+                                                value: Some(HeaderValue::CharacterString(
+                                                    partials.join(""),
+                                                )),
+                                                comment,
+                                            }),
+                                        )),
+                                    )
+                                }
+                                _ => (
+                                    HeaderParseState::ParsingMultiLine(previous_key, partials),
+                                    None,
+                                ),
+                            }
+                        }
+                        HeaderParseState::End => (HeaderParseState::End, None),
+                    }
+                }
+            }
+
             // Get file lock
             let mut file_lock = self.set_position();
             let mut line = CardImage::new();
             let mut line_count = 0;
             let mut header = Vec::new();
-            let mut end = false;
-            while (line_count % 36) != 0 || !end {
+            let mut state = HeaderParseState::init();
+            while (line_count % 36) != 0 || state != HeaderParseState::End {
                 match file_lock.read_exact(&mut line.0) {
                     Ok(_) => {
-                        if let Some((key, val)) = line.to_header_key_value() {
-                            if key == "END" {
-                                end = true;
-                            }
-                            header.push((key, val));
+                        let (new_state, some_key_value) = state.bump(line.to_header_key_value());
+                        state = new_state;
+                        if let Some(key_value) = some_key_value {
+                            header.push(key_value);
                         }
                     }
                     Err(_) => return None,
@@ -894,14 +980,14 @@ const T_U8: u8 = b'T';
 const F_U8: u8 = b'F';
 
 impl HeaderValue {
-    fn new(value: &[u8]) -> Option<HeaderValue> {
+    fn parse(value: &[u8]) -> Option<ParsedHeaderValue> {
         HeaderValue::new_character_string(value)
             .or_else(|| HeaderValue::new_logical(value))
             .or_else(|| HeaderValue::new_integer(value))
             .or_else(|| HeaderValue::new_real_floating(value))
     }
 
-    fn new_character_string(subcard: &[u8]) -> Option<HeaderValue> {
+    fn new_character_string(subcard: &[u8]) -> Option<ParsedHeaderValue> {
         if subcard[0] != QUOTE_U8 {
             return None;
         }
@@ -930,10 +1016,18 @@ impl HeaderValue {
                 s.push(*c as char);
             }
         }
-        Some(HeaderValue::CharacterString(s))
+        if s.ends_with('&') {
+            let new_len = s.len() - 1;
+            s.truncate(new_len);
+            Some(ParsedHeaderValue::PartialMultiLine(s))
+        } else {
+            Some(ParsedHeaderValue::Completed(HeaderValue::CharacterString(
+                s,
+            )))
+        }
     }
 
-    fn new_logical(value: &[u8]) -> Option<HeaderValue> {
+    fn new_logical(value: &[u8]) -> Option<ParsedHeaderValue> {
         let mut b = false;
         let logical_constant_column = 30 - 10 - 1;
         for (i, c) in value.iter().enumerate() {
@@ -949,26 +1043,33 @@ impl HeaderValue {
                 return None;
             }
         }
-        Some(HeaderValue::Logical(b))
+        Some(HeaderValue::Logical(b)).map(ParsedHeaderValue::Completed)
     }
 
-    fn new_integer(value: &[u8]) -> Option<HeaderValue> {
+    fn new_integer(value: &[u8]) -> Option<ParsedHeaderValue> {
         from_utf8(value)
             .ok()
             .and_then(|string| {
                 let trimmed = string.trim();
                 i32::from_str_radix(trimmed, 10).ok()
             }).map(HeaderValue::IntegerNumber)
+            .map(ParsedHeaderValue::Completed)
     }
 
-    fn new_real_floating(value: &[u8]) -> Option<HeaderValue> {
+    fn new_real_floating(value: &[u8]) -> Option<ParsedHeaderValue> {
         from_utf8(value)
             .ok()
             .and_then(|string| {
                 let trimmed = string.trim();
                 f64::from_str(trimmed).ok()
             }).map(HeaderValue::RealFloatingNumber)
+            .map(ParsedHeaderValue::Completed)
     }
+}
+
+enum ParsedHeaderValue {
+    Completed(HeaderValue),
+    PartialMultiLine(String),
 }
 
 impl HeaderValue {
@@ -1113,21 +1214,48 @@ impl<'a> Iterator for ValueCommentSplit<'a> {
 }
 
 impl HeaderValueComment {
-    fn new(value_comment: &[u8]) -> HeaderValueComment {
+    fn parse(value_comment: &[u8]) -> ValueCommentParseResult {
         let mut value_comment_iter = ValueCommentSplit::new(value_comment);
         let value_slice = value_comment_iter.next();
         let comment_slice = value_comment_iter.next();
-        HeaderValueComment {
-            value: value_slice.and_then(HeaderValue::new),
-            comment: comment_slice.map(|slice| {
-                let mut comment = HeaderComment::new();
-                for c in slice {
-                    comment.push(*c as char);
+
+        let comment = comment_slice.map(|slice| {
+            let mut comment = HeaderComment::new();
+            for c in slice {
+                comment.push(*c as char);
+            }
+            String::from(comment.trim())
+        });
+
+        if let Some(value_slice) = value_slice {
+            let parsed_value = HeaderValue::parse(value_slice);
+            match parsed_value {
+                Some(ParsedHeaderValue::Completed(value)) => {
+                    ValueCommentParseResult::Completed(HeaderValueComment {
+                        value: Some(value),
+                        comment,
+                    })
                 }
-                String::from(comment.trim())
-            }),
+                Some(ParsedHeaderValue::PartialMultiLine(partial)) => {
+                    ValueCommentParseResult::PartialMultiLine(partial)
+                }
+                None => ValueCommentParseResult::Completed(HeaderValueComment {
+                    value: None,
+                    comment,
+                }),
+            }
+        } else {
+            ValueCommentParseResult::Completed(HeaderValueComment {
+                value: None,
+                comment,
+            })
         }
     }
+}
+
+enum ValueCommentParseResult {
+    Completed(HeaderValueComment),
+    PartialMultiLine(String),
 }
 
 impl HeaderValueComment {
@@ -1160,7 +1288,7 @@ impl CardImage {
         CardImage([0u8; 80])
     }
 
-    fn to_header_key_value(&self) -> Option<(HeaderKeyWord, Option<HeaderValueComment>)> {
+    fn to_header_key_value(&self) -> ParsedCardImage {
         let card = self.0;
         let keyword = &card[0..8];
         let value_indicator = &card[8..10];
@@ -1173,15 +1301,37 @@ impl CardImage {
             key.push(*c as char);
         }
         if key.is_empty() {
-            return None;
+            return ParsedCardImage::Empty;
         }
         if value_indicator[0] == EQUAL_U8 && value_indicator[1] == SPACE_U8 {
-            let val = HeaderValueComment::new(value_comment);
-            Some((key, Some(val)))
+            match HeaderValueComment::parse(value_comment) {
+                ValueCommentParseResult::Completed(val) => {
+                    ParsedCardImage::Finished(key, Some(val))
+                }
+                ValueCommentParseResult::PartialMultiLine(s) => {
+                    ParsedCardImage::PartialMultiLine(key, s)
+                }
+            }
+        } else if keyword == b"CONTINUE" {
+            ParsedCardImage::Continue(HeaderValueComment::parse(value_comment))
+        } else if keyword == b"END     " {
+            ParsedCardImage::End
         } else {
-            Some((key, None))
+            ParsedCardImage::Comment(
+                key,
+                String::from_utf8_lossy(value_comment).trim().to_owned(),
+            )
         }
     }
+}
+
+enum ParsedCardImage {
+    Empty,
+    PartialMultiLine(HeaderKeyWord, String),
+    Finished(HeaderKeyWord, Option<HeaderValueComment>),
+    Continue(ValueCommentParseResult),
+    End,
+    Comment(HeaderKeyWord, String),
 }
 
 impl CardImage {
@@ -1208,7 +1358,7 @@ impl CardImage {
 
 #[cfg(test)]
 mod tests {
-    use super::{CardImage, Fits, HeaderValue};
+    use super::{CardImage, Fits, HeaderValue, ParsedCardImage};
 
     impl CardImage {
         fn from(s: &str) -> CardImage {
@@ -1223,50 +1373,63 @@ mod tests {
     #[test]
     fn read_card_image_character_string() {
         let card = CardImage::from("AUTHOR  = 'Malik Olivier Boussejra <malik@boussejra.com>' /");
-        let header_key_value = card.to_header_key_value().unwrap();
-        assert_eq!(header_key_value.0, String::from("AUTHOR"));
-        let value_comment = header_key_value.1.unwrap();
-        assert_eq!(
-            value_comment.value,
-            Some(HeaderValue::CharacterString(String::from(
-                "Malik Olivier Boussejra <malik@boussejra.com>",
-            )))
-        );
-        assert_eq!(value_comment.comment, Some(String::from("")));
+
+        if let ParsedCardImage::Finished(key, header_value_comment) = card.to_header_key_value() {
+            assert_eq!(key, String::from("AUTHOR"));
+            let value_comment = header_value_comment.unwrap();
+            assert_eq!(
+                value_comment.value,
+                Some(HeaderValue::CharacterString(String::from(
+                    "Malik Olivier Boussejra <malik@boussejra.com>",
+                )))
+            );
+            assert_eq!(value_comment.comment, Some(String::from("")));
+        } else {
+            panic!("Failed")
+        }
     }
 
     #[test]
     fn read_card_image_no_comment() {
         let card = CardImage::from("AUTHOR  = ''");
-        let header_key_value = card.to_header_key_value().unwrap();
-        let value_comment = header_key_value.1.unwrap();
-        assert_eq!(
-            value_comment.value,
-            Some(HeaderValue::CharacterString(String::from("")))
-        );
-        assert_eq!(value_comment.comment, None);
+        if let ParsedCardImage::Finished(_, header_value_comment) = card.to_header_key_value() {
+            let value_comment = header_value_comment.unwrap();
+            assert_eq!(
+                value_comment.value,
+                Some(HeaderValue::CharacterString(String::from("")))
+            );
+            assert_eq!(value_comment.comment, None);
+        } else {
+            panic!("Failed")
+        }
     }
 
     #[test]
     fn read_card_image_character_trailing_space() {
         let card = CardImage::from("AUTHOR  = '  ab d  '");
-        let header_key_value = card.to_header_key_value().unwrap();
-        let value_comment = header_key_value.1.unwrap();
-        assert_eq!(
-            value_comment.value,
-            Some(HeaderValue::CharacterString(String::from("  ab d")))
-        );
+        if let ParsedCardImage::Finished(_, header_value_comment) = card.to_header_key_value() {
+            let value_comment = header_value_comment.unwrap();
+            assert_eq!(
+                value_comment.value,
+                Some(HeaderValue::CharacterString(String::from("  ab d")))
+            );
+        } else {
+            panic!("Failed")
+        }
     }
 
     #[test]
     fn read_card_image_character_blank() {
         let card = CardImage::from("AUTHOR  = '  '");
-        let header_key_value = card.to_header_key_value().unwrap();
-        let value_comment = header_key_value.1.unwrap();
-        assert_eq!(
-            value_comment.value,
-            Some(HeaderValue::CharacterString(String::from(" ")))
-        );
+        if let ParsedCardImage::Finished(_, header_value_comment) = card.to_header_key_value() {
+            let value_comment = header_value_comment.unwrap();
+            assert_eq!(
+                value_comment.value,
+                Some(HeaderValue::CharacterString(String::from(" ")))
+            );
+        } else {
+            panic!("Failed")
+        }
     }
 
     #[test]
@@ -1274,76 +1437,97 @@ mod tests {
         let card = CardImage::from(
             "BUNIT   = '1E-17 erg/s/cm^2/Ang/spaxel' / Specific intensity (per spaxel)       ",
         );
-        let header_key_value = card.to_header_key_value().unwrap();
-        let value_comment = header_key_value.1.unwrap();
-        assert_eq!(
-            value_comment.value,
-            Some(HeaderValue::CharacterString(String::from(
-                "1E-17 erg/s/cm^2/Ang/spaxel"
-            )))
-        );
+        if let ParsedCardImage::Finished(_, header_value_comment) = card.to_header_key_value() {
+            let value_comment = header_value_comment.unwrap();
+            assert_eq!(
+                value_comment.value,
+                Some(HeaderValue::CharacterString(String::from(
+                    "1E-17 erg/s/cm^2/Ang/spaxel"
+                )))
+            );
+        } else {
+            panic!("Failed")
+        }
     }
 
     #[test]
     fn read_card_image_character_logical_true() {
         let card = CardImage::from("SIMPLE  =                    T /                     ");
-        let header_key_value = card.to_header_key_value().unwrap();
-        let value_comment = header_key_value.1.unwrap();
-        assert_eq!(value_comment.value, Some(HeaderValue::Logical(true)));
+        if let ParsedCardImage::Finished(_, header_value_comment) = card.to_header_key_value() {
+            let value_comment = header_value_comment.unwrap();
+            assert_eq!(value_comment.value, Some(HeaderValue::Logical(true)));
+        } else {
+            panic!("Failed")
+        }
     }
 
     #[test]
     fn read_card_image_character_logical_false() {
         let card = CardImage::from("SIMPLE  =                    F /                     ");
-        let header_key_value = card.to_header_key_value().unwrap();
-        let value_comment = header_key_value.1.unwrap();
-        assert_eq!(value_comment.value, Some(HeaderValue::Logical(false)));
+        if let ParsedCardImage::Finished(_, header_value_comment) = card.to_header_key_value() {
+            let value_comment = header_value_comment.unwrap();
+            assert_eq!(value_comment.value, Some(HeaderValue::Logical(false)));
+        } else {
+            panic!("Failed")
+        }
     }
 
     #[test]
     fn read_card_image_character_integer() {
         let card = CardImage::from("BITPIX  =                    8 /                     ");
-        let header_key_value = card.to_header_key_value().unwrap();
-        let value_comment = header_key_value.1.unwrap();
-        assert_eq!(value_comment.value, Some(HeaderValue::IntegerNumber(8)));
+        if let ParsedCardImage::Finished(_, header_value_comment) = card.to_header_key_value() {
+            let value_comment = header_value_comment.unwrap();
+            assert_eq!(value_comment.value, Some(HeaderValue::IntegerNumber(8)));
+        } else {
+            panic!("Failed")
+        }
     }
 
     #[test]
     fn read_card_image_character_real() {
         let card =
             CardImage::from("EXPTIME =              13501.5 / Total exposure time (seconds)");
-        let header_key_value = card.to_header_key_value().unwrap();
-        let value_comment = header_key_value.1.unwrap();
-        assert_eq!(
-            value_comment.value,
-            Some(HeaderValue::RealFloatingNumber(13501.5))
-        );
+        if let ParsedCardImage::Finished(_, header_value_comment) = card.to_header_key_value() {
+            let value_comment = header_value_comment.unwrap();
+            assert_eq!(
+                value_comment.value,
+                Some(HeaderValue::RealFloatingNumber(13501.5))
+            );
+        } else {
+            panic!("Failed")
+        }
     }
 
     #[test]
     fn read_card_image_character_real_exp() {
         let card = CardImage::from("CDELT1  =      -1.666667E-03 /");
-        let header_key_value = card.to_header_key_value().unwrap();
-        let value_comment = header_key_value.1.unwrap();
-        assert_eq!(
-            value_comment.value,
-            Some(HeaderValue::RealFloatingNumber(-1.666667E-03))
-        );
+        if let ParsedCardImage::Finished(_, header_value_comment) = card.to_header_key_value() {
+            let value_comment = header_value_comment.unwrap();
+            assert_eq!(
+                value_comment.value,
+                Some(HeaderValue::RealFloatingNumber(-1.666667E-03))
+            );
+        } else {
+            panic!("Failed")
+        }
     }
 
     #[test]
     fn read_card_image_character_comments() {
         let card = CardImage::from("CRPIX1  =              38.0000 /Reference pixel (1-indexed)");
-        let header_key_value = card.to_header_key_value().unwrap();
-        let value_comment = header_key_value.1.unwrap();
-        assert_eq!(
-            value_comment.value,
-            Some(HeaderValue::RealFloatingNumber(38.0))
-        );
-        assert_eq!(
-            value_comment.comment.unwrap(),
-            "Reference pixel (1-indexed)"
-        );
+        if let ParsedCardImage::Finished(_, header_value_comment) = card.to_header_key_value() {
+            let value_comment = header_value_comment.unwrap();
+            assert_eq!(
+                value_comment.value,
+                Some(HeaderValue::RealFloatingNumber(38.0))
+            );
+            assert_eq!(
+                value_comment.comment.unwrap(),
+                "Reference pixel (1-indexed)"
+            );
+        } else {
+            panic!("Failed")
+        }
     }
 
     #[test]
