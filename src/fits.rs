@@ -550,7 +550,7 @@ trait IterableOverHdu: MovableCursor {
                                     )
                                 }
                                 ParsedCardImage::Continue(
-                                    ValueCommentParseResult::PartialMultiLine(partial),
+                                    ParsedHeaderValueComment::PartialMultiLine(partial),
                                 ) => {
                                     partials.push(partial);
                                     (
@@ -558,7 +558,7 @@ trait IterableOverHdu: MovableCursor {
                                         None,
                                     )
                                 }
-                                ParsedCardImage::Continue(ValueCommentParseResult::Completed(
+                                ParsedCardImage::Continue(ParsedHeaderValueComment::Completed(
                                     header_value_comment,
                                 )) => {
                                     let HeaderValueComment { value, comment } =
@@ -1214,7 +1214,7 @@ impl<'a> Iterator for ValueCommentSplit<'a> {
 }
 
 impl HeaderValueComment {
-    fn parse(value_comment: &[u8]) -> ValueCommentParseResult {
+    fn parse(value_comment: &[u8]) -> ParsedHeaderValueComment {
         let mut value_comment_iter = ValueCommentSplit::new(value_comment);
         let value_slice = value_comment_iter.next();
         let comment_slice = value_comment_iter.next();
@@ -1231,21 +1231,21 @@ impl HeaderValueComment {
             let parsed_value = HeaderValue::parse(value_slice);
             match parsed_value {
                 Some(ParsedHeaderValue::Completed(value)) => {
-                    ValueCommentParseResult::Completed(HeaderValueComment {
+                    ParsedHeaderValueComment::Completed(HeaderValueComment {
                         value: Some(value),
                         comment,
                     })
                 }
                 Some(ParsedHeaderValue::PartialMultiLine(partial)) => {
-                    ValueCommentParseResult::PartialMultiLine(partial)
+                    ParsedHeaderValueComment::PartialMultiLine(partial)
                 }
-                None => ValueCommentParseResult::Completed(HeaderValueComment {
+                None => ParsedHeaderValueComment::Completed(HeaderValueComment {
                     value: None,
                     comment,
                 }),
             }
         } else {
-            ValueCommentParseResult::Completed(HeaderValueComment {
+            ParsedHeaderValueComment::Completed(HeaderValueComment {
                 value: None,
                 comment,
             })
@@ -1253,7 +1253,7 @@ impl HeaderValueComment {
     }
 }
 
-enum ValueCommentParseResult {
+enum ParsedHeaderValueComment {
     Completed(HeaderValueComment),
     PartialMultiLine(String),
 }
@@ -1305,10 +1305,10 @@ impl CardImage {
         }
         if value_indicator[0] == EQUAL_U8 && value_indicator[1] == SPACE_U8 {
             match HeaderValueComment::parse(value_comment) {
-                ValueCommentParseResult::Completed(val) => {
+                ParsedHeaderValueComment::Completed(val) => {
                     ParsedCardImage::Finished(key, Some(val))
                 }
-                ValueCommentParseResult::PartialMultiLine(s) => {
+                ParsedHeaderValueComment::PartialMultiLine(s) => {
                     ParsedCardImage::PartialMultiLine(key, s)
                 }
             }
@@ -1329,7 +1329,7 @@ enum ParsedCardImage {
     Empty,
     PartialMultiLine(HeaderKeyWord, String),
     Finished(HeaderKeyWord, Option<HeaderValueComment>),
-    Continue(ValueCommentParseResult),
+    Continue(ParsedHeaderValueComment),
     End,
     Comment(HeaderKeyWord, String),
 }
