@@ -1,6 +1,6 @@
 [package]
 name = "fitrs"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Malik Olivier Boussejra <malik@boussejra.com>"]
 description = "Parse FITS file in pure rust"
 documentation = "http://boussejra.com/rust-doc/fitrs"
