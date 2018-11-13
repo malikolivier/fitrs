@@ -1693,8 +1693,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    /// TODO: The implementation does not format floats as per the spec
     fn header_value_real_floating_number_to_raw() {
         let val = HeaderValue::RealFloatingNumber(15.1515151515152);
         println!(
