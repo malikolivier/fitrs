@@ -1695,10 +1695,6 @@ mod tests {
     #[test]
     fn header_value_real_floating_number_to_raw() {
         let val = HeaderValue::RealFloatingNumber(15.1515151515152);
-        println!(
-            "{:?}",
-            val.raw().into_iter().map(|c| c as char).collect::<String>()
-        );
         assert_eq!(val.raw(), b"1.51515151515152E+01");
     }
 }
