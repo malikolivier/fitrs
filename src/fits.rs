@@ -951,10 +951,17 @@ impl Hdu {
         let mut file_lock = self.file.as_ref().unwrap().lock().expect("Get lock");
         file_lock.seek(SeekFrom::Start(self.data_start))?;
 
+        let mut images = vec![];
         for (key, value) in &self.header {
-            file_lock.write_all(CardImage::from_header_key_value(key, value).raw())?;
+            for image in CardImage::from_header_key_value(key, value) {
+                images.push(image.0);
+            }
         }
-        let padding = 36 - (self.header.len() % 36);
+        let header_len = images.len();
+        for image in images {
+            file_lock.write_all(&image)?;
+        }
+        let padding = 36 - (header_len % 36);
         for _ in 0..padding {
             file_lock.write_all(CardImage::EMPTY.raw())?;
         }
@@ -1071,34 +1078,58 @@ enum ParsedHeaderValue {
 }
 
 impl HeaderValue {
-    fn raw(&self) -> Vec<u8> {
+    fn raw(&self) -> Vec<Vec<u8>> {
         use scifmt::SciFmt;
 
-        let mut raw = Vec::with_capacity(32);
         match self {
             HeaderValue::CharacterString(string) => {
-                raw.push(QUOTE_U8);
-                for c in string.bytes() {
-                    if c == QUOTE_U8 {
-                        // Escape quote with another quote
-                        raw.push(QUOTE_U8);
-                        raw.push(QUOTE_U8);
-                    } else {
-                        raw.push(c);
+                let mut lines = vec![vec![QUOTE_U8]];
+                let mut bytes = string.bytes();
+                'make_line: loop {
+                    const MAX_STRING_LEN: usize = 67;
+                    let mut raw = lines.pop().unwrap();
+                    let mut len = 0;
+                    loop {
+                        if let Some(c) = bytes.next() {
+                            if c == QUOTE_U8 && len < MAX_STRING_LEN - 1 {
+                                // Escape quote with another quote
+                                raw.push(QUOTE_U8);
+                                raw.push(QUOTE_U8);
+                                len += 2;
+                            } else if c == QUOTE_U8 {
+                                raw.push(b'&');
+                                raw.push(QUOTE_U8);
+                                lines.push(raw);
+                                lines.push(vec![QUOTE_U8; 3]);
+                                continue 'make_line;
+                            } else {
+                                raw.push(c);
+                                len += 1;
+                            }
+                            // Handle case for multi-line string
+                            if len >= MAX_STRING_LEN {
+                                raw.push(b'&');
+                                raw.push(QUOTE_U8);
+                                lines.push(raw);
+                                lines.push(vec![QUOTE_U8]);
+                                continue 'make_line;
+                            }
+                        } else {
+                            raw.push(QUOTE_U8);
+                            lines.push(raw);
+                            break 'make_line;
+                        }
                     }
                 }
-                raw.push(QUOTE_U8);
+                lines
             }
             HeaderValue::Logical(b) => {
-                for _ in 0..19 {
-                    raw.push(SPACE_U8);
-                }
-                raw.push(if *b { T_U8 } else { F_U8 });
+                let mut raw = vec![SPACE_U8; 20];
+                raw[19] = if *b { T_U8 } else { F_U8 };
+                vec![raw]
             }
             HeaderValue::IntegerNumber(n) => {
-                for _ in 0..20 {
-                    raw.push(SPACE_U8);
-                }
+                let mut raw = vec![SPACE_U8; 20];
 
                 let mut byte_iter = n.to_string().into_bytes().into_iter();
                 let mut i = 0;
@@ -1106,11 +1137,10 @@ impl HeaderValue {
                     raw[19 - i] = c;
                     i += 1;
                 }
+                vec![raw]
             }
             HeaderValue::RealFloatingNumber(f) => {
-                for _ in 0..20 {
-                    raw.push(SPACE_U8);
-                }
+                let mut raw = vec![SPACE_U8; 20];
 
                 let mut byte_iter = f.sci_fmt().into_bytes().into_iter();
                 let mut i = 0;
@@ -1118,6 +1148,7 @@ impl HeaderValue {
                     raw[19 - i] = c;
                     i += 1;
                 }
+                vec![raw]
             }
             HeaderValue::ComplexIntegerNumber(..) => {
                 unimplemented!("ComplexIntegerNumber not implemented")
@@ -1126,7 +1157,6 @@ impl HeaderValue {
                 unimplemented!("ComplexFloatingNumber not implemented")
             }
         }
-        raw
     }
 }
 
@@ -1256,27 +1286,32 @@ enum ParsedHeaderValueComment {
 }
 
 impl HeaderValueComment {
-    fn raw(&self) -> [u8; 70] {
-        let mut raw = [SPACE_U8; 70];
-        let offset = if let Some(value) = &self.value {
-            let value_raw = value.raw();
-            let value_raw_len = value_raw.len();
-            for (i, c) in value_raw.into_iter().enumerate() {
-                raw[i] = c;
+    fn raw(&self) -> Vec<[u8; 70]> {
+        let (offset, mut lines) = if let Some(value) = &self.value {
+            let value_raw_lines = value.raw();
+            let value_raw_line_count = value_raw_lines.len();
+            let mut lines = vec![[SPACE_U8; 70]; value_raw_line_count];
+            let mut value_raw_len = 0;
+            for (line_raw, line) in value_raw_lines.into_iter().zip(lines.iter_mut()) {
+                value_raw_len = line_raw.len();
+                for (i, c) in line_raw.into_iter().enumerate() {
+                    line[i] = c;
+                }
+                line[value_raw_len + 1] = SLASH_U8;
             }
-            raw[value_raw_len + 1] = SLASH_U8;
-            value_raw_len + 2
+            (value_raw_len + 2, lines)
         } else {
-            0
+            (0, Vec::new())
         };
 
         if let Some(comment) = &self.comment {
+            let raw = lines.last_mut().unwrap();
             for (i, c) in comment.bytes().enumerate() {
                 raw[i + offset] = c;
             }
         };
 
-        raw
+        lines
     }
 }
 
@@ -1336,18 +1371,38 @@ impl CardImage {
         &self.0
     }
 
-    fn from_header_key_value(key: &str, value: &Option<HeaderValueComment>) -> CardImage {
+    fn from_header_key_value(key: &str, value: &Option<HeaderValueComment>) -> Vec<CardImage> {
         let mut raw = [SPACE_U8; 80];
         for (i, c) in key.bytes().enumerate().take(8) {
             raw[i] = c;
         }
-        if let Some(value) = value {
+        let (raw, lines) = if let Some(value) = value {
             raw[8] = EQUAL_U8;
-            for (i, c) in value.raw().into_iter().enumerate() {
+            let mut lines = value.raw().into_iter();
+            for (i, c) in lines.next().unwrap().into_iter().enumerate() {
                 raw[10 + i] = *c;
             }
+            (raw, lines)
+        } else {
+            (raw, vec![].into_iter())
+        };
+        let mut images = vec![CardImage(raw)];
+        for line in lines {
+            let mut raw = [SPACE_U8; 80];
+            raw[0] = b'C';
+            raw[1] = b'O';
+            raw[2] = b'N';
+            raw[3] = b'T';
+            raw[4] = b'I';
+            raw[5] = b'N';
+            raw[6] = b'U';
+            raw[7] = b'E';
+            for (i, c) in line.into_iter().enumerate() {
+                raw[10 + i] = *c;
+            }
+            images.push(CardImage(raw))
         }
-        CardImage(raw)
+        images
     }
 }
 
@@ -1671,30 +1726,46 @@ mod tests {
     #[test]
     fn header_value_character_string_to_raw() {
         let val = HeaderValue::CharacterString("Hey!".to_string());
-        assert_eq!(val.raw(), b"'Hey!'");
+        assert_eq!(val.raw(), vec![b"'Hey!'"]);
     }
 
     #[test]
     fn header_value_escaped_character_string_to_raw() {
         let val = HeaderValue::CharacterString("'Hey!'".to_string());
-        assert_eq!(val.raw(), b"'''Hey!'''");
+        assert_eq!(val.raw(), vec![b"'''Hey!'''"]);
+    }
+
+    #[test]
+    fn header_value_character_long_string_to_raw() {
+        let val = HeaderValue::CharacterString(
+            "This is a very long string value that is continued over more than one keyword."
+                .to_string(),
+        );
+        assert_eq!(
+            val.raw(),
+            vec![
+                b"'This is a very long string value that is continued over more than o&'"
+                    as &[u8],
+                b"'ne keyword.'" as &[u8]
+            ]
+        );
     }
 
     #[test]
     fn header_value_logical_to_raw() {
         let val = HeaderValue::Logical(true);
-        assert_eq!(val.raw(), b"                   T");
+        assert_eq!(val.raw(), vec![b"                   T"]);
     }
 
     #[test]
     fn header_value_integer_number_to_raw() {
         let val = HeaderValue::IntegerNumber(12);
-        assert_eq!(val.raw(), b"                  12");
+        assert_eq!(val.raw(), vec![b"                  12"]);
     }
 
     #[test]
     fn header_value_real_floating_number_to_raw() {
         let val = HeaderValue::RealFloatingNumber(15.1515151515152);
-        assert_eq!(val.raw(), b"1.51515151515152E+01");
+        assert_eq!(val.raw(), vec![b"1.51515151515152E+01"]);
     }
 }
