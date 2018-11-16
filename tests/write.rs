@@ -2,7 +2,7 @@ extern crate fitrs;
 
 use std::process::Command;
 
-use fitrs::{Fits, Hdu, HeaderValue};
+use fitrs::{Fits, Hdu};
 
 #[test]
 fn write_single_hdu_file() {
@@ -50,10 +50,7 @@ fn write_file_with_long_string() {
     let mut primary_hdu = Hdu::new(&[1], vec![0]);
     primary_hdu.insert(
         "TEST",
-        HeaderValue::CharacterString(
-            "This is a very long string value that is continued over more than one keyword."
-                .to_owned(),
-        ),
+        "This is a very long string value that is continued over more than one keyword.",
     );
     let _ = Fits::create("out.fits", primary_hdu).expect("created!");
 
