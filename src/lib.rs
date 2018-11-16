@@ -60,6 +60,7 @@
 extern crate byteorder;
 
 mod fits;
+mod header;
 mod scifmt;
 mod types;
 mod wcs;

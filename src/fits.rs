@@ -979,12 +979,12 @@ impl Hdu {
         Ok(())
     }
 
-    pub fn insert<K: Into<String>>(&mut self, key: K, value: HeaderValue) {
+    pub fn insert<K: Into<String>, V: Into<HeaderValue>>(&mut self, key: K, value: V) {
         let end_card = self.header.pop().unwrap();
         self.header.push((
             key.into(),
             Some(HeaderValueComment {
-                value: Some(value),
+                value: Some(value.into()),
                 comment: None,
             }),
         ));
