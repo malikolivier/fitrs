@@ -978,6 +978,18 @@ impl Hdu {
         }
         Ok(())
     }
+
+    pub fn insert<K: Into<String>>(&mut self, key: K, value: HeaderValue) {
+        let end_card = self.header.pop().unwrap();
+        self.header.push((
+            key.into(),
+            Some(HeaderValueComment {
+                value: Some(value),
+                comment: None,
+            }),
+        ));
+        self.header.push(end_card);
+    }
 }
 const EQUAL_U8: u8 = b'=';
 const SPACE_U8: u8 = b' ';
