@@ -1309,7 +1309,12 @@ impl HeaderValueComment {
                 for (i, c) in line_raw.into_iter().enumerate() {
                     line[i] = c;
                 }
-                line[value_raw_len + 1] = SLASH_U8;
+                // Current fitrs does not allow the user to insert comments,
+                // so we can safely ignore comments that would overflow the
+                // 70-character limit per line.
+                if value_raw_len + 1 < line.len() {
+                    line[value_raw_len + 1] = SLASH_U8;
+                }
             }
             (value_raw_len + 2, lines)
         } else {
@@ -1319,7 +1324,9 @@ impl HeaderValueComment {
         if let Some(comment) = &self.comment {
             let raw = lines.last_mut().unwrap();
             for (i, c) in comment.bytes().enumerate() {
-                raw[i + offset] = c;
+                if i + offset < raw.len() {
+                    raw[i + offset] = c;
+                }
             }
         };
 
