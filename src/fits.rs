@@ -988,6 +988,22 @@ impl Hdu {
         Ok(())
     }
 
+    /// Insert a value into header.
+    ///
+    /// FITS file is saved with the header in the order of insertion.
+    /// Keys longer than 8 bytes are truncated on writing to disk.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # extern crate fitrs;
+    /// use fitrs::{Hdu};
+    /// let mut hdu = Hdu::empty();
+    /// hdu.insert("KEYSTR", "My string");
+    /// hdu.insert("KEYSTR2", "Strings longer than 68 characters are supported as well, following the continued string convention.");
+    /// hdu.insert("KEYFLOAT", 3.14);
+    /// hdu.insert("KEYINT", 42);
+    /// ```
     pub fn insert<K: Into<String>, V: Into<HeaderValue>>(&mut self, key: K, value: V) {
         let end_card = self.header.pop().unwrap();
         self.header.push((
