@@ -63,3 +63,18 @@ fn write_file_with_long_string() {
     assert_eq!(output.stderr, vec![], "No error output");
     assert!(output.status.success(), "Exit with success");
 }
+
+#[test]
+fn write_file_with_empty_hdu() {
+    let primary_hdu = Hdu::empty();
+    let _ = Fits::create("out.fits", primary_hdu).expect("created!");
+
+    let output = Command::new("verify/verify.py")
+        .arg("out.fits")
+        .output()
+        .expect("Failed to execute verify command");
+
+    assert_eq!(output.stdout, vec![], "No standard output");
+    assert_eq!(output.stderr, vec![], "No error output");
+    assert!(output.status.success(), "Exit with success");
+}

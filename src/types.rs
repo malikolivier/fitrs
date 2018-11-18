@@ -69,3 +69,16 @@ impl FitsDataType for f64 {
         -64
     }
 }
+
+impl FitsDataType for () {
+    fn new_fits_array(_shape: &[usize], _data: Vec<()>) -> FitsData {
+        FitsData::IntegersU32(FitsDataArray {
+            shape: vec![],
+            data: vec![],
+        })
+    }
+
+    fn bitpix() -> i32 {
+        8
+    }
+}

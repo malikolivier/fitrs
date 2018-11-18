@@ -947,6 +947,11 @@ impl Hdu {
         }
     }
 
+    /// Make an Hdu with an empty data array.
+    pub fn empty() -> Hdu {
+        Hdu::new::<()>(&[], vec![])
+    }
+
     fn write(&mut self) -> Result<(), Error> {
         let mut file_lock = self.file.as_ref().unwrap().lock().expect("Get lock");
         file_lock.seek(SeekFrom::Start(self.data_start))?;
