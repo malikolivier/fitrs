@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [v0.4.0] - 2018-11-19
+
 ### Added
 - Writing FITS file:
   - Can write custom values to header.
