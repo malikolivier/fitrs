@@ -45,7 +45,7 @@
 ## [v0.2.4] - 2018-10-25
 
 ### Fixed
-- Correctly read commment for some edge cases.
+- Correctly read comment for some edge cases.
 
 ## [v0.2.3] - 2018-10-24
 
