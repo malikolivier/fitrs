@@ -961,9 +961,11 @@ impl Hdu {
         for image in images {
             file_lock.write_all(&image)?;
         }
-        let padding = 36 - (header_len % 36);
-        for _ in 0..padding {
-            file_lock.write_all(CardImage::EMPTY.raw())?;
+        if header_len % 36 != 0 {
+            let padding = 36 - (header_len % 36);
+            for _ in 0..padding {
+                file_lock.write_all(CardImage::EMPTY.raw())?;
+            }
         }
 
         if let Some(data) = self.data() {
@@ -972,9 +974,11 @@ impl Hdu {
             file_lock.write_all(&raw)?;
 
             const RECORD_SIZE: usize = 36 * 80;
-            let padding = RECORD_SIZE - (raw.len() % RECORD_SIZE);
-            let padding_data = vec![0u8; padding];
-            file_lock.write_all(&padding_data)?;
+            if raw.len() % RECORD_SIZE != 0 {
+                let padding = RECORD_SIZE - (raw.len() % RECORD_SIZE);
+                let padding_data = vec![0u8; padding];
+                file_lock.write_all(&padding_data)?;
+            }
         }
         Ok(())
     }
