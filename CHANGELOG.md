@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [v0.4.2] - 2018-12-02
+
 ### Added
 
 - Add support for CDELTn keyword for WCS
