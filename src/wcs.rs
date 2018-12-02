@@ -39,10 +39,11 @@ impl WCS {
             let crpix_key = format!("CRPIX{}", n + 1);
             let crval_key = format!("CRVAL{}", n + 1);
             let cd_key = format!("CD{}_{}", n + 1, n + 1);
+            let cdelt_key = format!("CDELT{}", n + 1);
             if let (Some(crpix), Some(crval), Some(cd)) = (
                 get_number(hdu, &crpix_key),
                 get_number(hdu, &crval_key),
-                get_number(hdu, &cd_key),
+                get_number(hdu, &cd_key).or_else(|| get_number(hdu, &cdelt_key)),
             ) {
                 // FITS are 1-indexed, so correct offset so that it becomes 0-indexed.
                 coef.crpix = crpix - 1.0;
