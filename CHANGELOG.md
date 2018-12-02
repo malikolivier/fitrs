@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [v0.4.1] - 2018-12-02
+
 ### Changed
 
 - 4-dimensional FITS support for WCS
