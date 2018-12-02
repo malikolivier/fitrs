@@ -1,6 +1,6 @@
 use fits::{Hdu, HeaderValue};
 
-const MAX_DIM: usize = 3;
+const MAX_DIM: usize = 4;
 
 /// World Coordinates
 ///
