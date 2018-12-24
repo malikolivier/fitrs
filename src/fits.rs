@@ -1094,7 +1094,8 @@ impl HeaderValue {
             .and_then(|string| {
                 let trimmed = string.trim();
                 i32::from_str_radix(trimmed, 10).ok()
-            }).map(HeaderValue::IntegerNumber)
+            })
+            .map(HeaderValue::IntegerNumber)
             .map(ParsedHeaderValue::Full)
     }
 
@@ -1104,7 +1105,8 @@ impl HeaderValue {
             .and_then(|string| {
                 let trimmed = string.trim();
                 f64::from_str(trimmed).ok()
-            }).map(HeaderValue::RealFloatingNumber)
+            })
+            .map(HeaderValue::RealFloatingNumber)
             .map(ParsedHeaderValue::Full)
     }
 }
