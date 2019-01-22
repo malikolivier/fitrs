@@ -1425,7 +1425,7 @@ impl CardImage {
         let (raw, lines) = if let Some(value) = value {
             raw[8] = EQUAL_U8;
             let mut lines = value.raw().into_iter();
-            for (i, c) in lines.next().unwrap().into_iter().enumerate() {
+            for (i, c) in lines.next().unwrap().iter().enumerate() {
                 raw[10 + i] = *c;
             }
             (raw, lines)
@@ -1443,7 +1443,7 @@ impl CardImage {
             raw[5] = b'N';
             raw[6] = b'U';
             raw[7] = b'E';
-            for (i, c) in line.into_iter().enumerate() {
+            for (i, c) in line.iter().enumerate() {
                 raw[10 + i] = *c;
             }
             images.push(CardImage(raw))
