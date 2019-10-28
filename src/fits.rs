@@ -798,8 +798,8 @@ impl Hdu {
                     let mut buf = vec![0i16; len];
                     file.read_i16_into::<BigEndian>(&mut buf)
                         .expect("Read array");
-                    if blank.is_some() {
-                        let blank = blank.unwrap() as i16;
+                    if let Some(blank) = blank {
+                        let blank = blank as i16;
                         buf.into_iter()
                             .map(|n| if n == blank { None } else { Some(i32::from(n)) })
                             .collect()
@@ -814,8 +814,7 @@ impl Hdu {
                     let mut buf = vec![0i32; len];
                     file.read_i32_into::<BigEndian>(&mut buf)
                         .expect("Read array");
-                    if blank.is_some() {
-                        let blank = blank.unwrap();
+                    if let Some(blank) = blank {
                         buf.into_iter()
                             .map(|n| if n == blank { None } else { Some(n) })
                             .collect()
