@@ -562,21 +562,18 @@ impl<'f> Iterator for FitsIter<'f> {
                 return None;
             }
         }
-        {
-            let hdus = self.fits.hdus.read().expect("Get read lock");
-            // let hdu_guard = self.fits.hdus_guard();
-            // let hdus = unsafe { &mut *hdu_guard.load(Ordering::SeqCst) };
-            if self.count < hdus.len() {
-                self.count += 1;
-                let hdu = &hdus[self.count - 1];
-                self.position = hdu.next_hdu_start;
-                return Some(hdu.clone());
-            }
+        let mut hdus = self.fits.hdus.write().expect("Get read lock");
+        // let hdu_guard = self.fits.hdus_guard();
+        // let hdus = unsafe { &mut *hdu_guard.load(Ordering::SeqCst) };
+        if self.count < hdus.len() {
+            self.count += 1;
+            let hdu = &hdus[self.count - 1];
+            self.position = hdu.next_hdu_start;
+            return Some(hdu.clone());
         }
         if let Some(hdu) = self.read_next_hdu() {
             self.count += 1;
             self.position = hdu.next_hdu_start;
-            let mut hdus = self.fits.hdus.write().expect("Get write lock");
             hdus.push(hdu.clone());
             Some(hdu)
         } else {
