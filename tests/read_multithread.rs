@@ -19,19 +19,22 @@ fn read_second_hdu_array_from_n_threads() {
     let mut panicked = vec![];
 
     let mut children = Vec::with_capacity(THREAD_COUNT);
-    for fits in fits_arcs {
-        let child = thread::spawn(move || {
-            let mut iter = fits.iter();
-            iter.next();
-            let table_hdu_1 = iter.next().unwrap();
-            let data = table_hdu_1.read_data();
-            match data {
-                FitsData::Characters(array) => {
-                    assert_eq!(&array.data[..30], FIRST_30_CHARS,);
+    for (i, fits) in fits_arcs.into_iter().enumerate() {
+        let child = thread::Builder::new()
+            .name(format!("#{}", i))
+            .spawn(move || {
+                let mut iter = fits.iter();
+                iter.next();
+                let table_hdu_1 = iter.next().unwrap();
+                let data = table_hdu_1.read_data();
+                match data {
+                    FitsData::Characters(array) => {
+                        assert_eq!(&array.data[..30], FIRST_30_CHARS,);
+                    }
+                    _ => panic!("Should be Characters!"),
                 }
-                _ => panic!("Should be Characters!"),
-            }
-        });
+            })
+            .unwrap();
         children.push(child);
     }
 
