@@ -362,15 +362,14 @@ impl<'a> IntoIterator for &'a Fits {
     }
 }
 
+fn tell(file: &mut File) -> u64 {
+    file.seek(SeekFrom::Current(0))
+        .expect("Could not get cursor position!")
+}
+
 trait MovableCursor {
     fn file(&self) -> MutexGuard<File>;
     fn position(&self) -> u64;
-
-    fn tell(file_lock: &mut MutexGuard<File>) -> u64 {
-        file_lock
-            .seek(SeekFrom::Current(0))
-            .expect("Could not get cursor position!")
-    }
 
     fn set_position(&self) -> MutexGuard<File> {
         let position = self.position();
@@ -520,7 +519,7 @@ trait IterableOverHdu: MovableCursor {
                 };
                 line_count += 1;
             }
-            let data_start_position = Self::tell(&mut file_lock);
+            let data_start_position = tell(&mut *file_lock);
             (header, data_start_position)
         };
         // Lock released
