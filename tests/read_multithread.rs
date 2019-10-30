@@ -13,7 +13,7 @@ fn read_second_hdu_array_from_n_threads() {
         '\u{0}', 'ÿ', 'ÿ', 'ÿ', 'ÿ', '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}',
     ];
 
-    const THREAD_COUNT: usize = 10;
+    const THREAD_COUNT: usize = 10000;
     let fits = Arc::new(Fits::open("tests/testprog.fit").unwrap());
     let fits_arcs = (0..THREAD_COUNT).map(|_| fits.clone());
     let mut panicked = vec![];
