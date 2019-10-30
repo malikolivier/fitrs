@@ -649,7 +649,7 @@ impl Hdu {
         let bitpix = self
             .value_as_integer_number("BITPIX")
             .expect("BITPIX is present");
-        let data = match bitpix {
+        match bitpix {
             8 => FitsData::Characters(self.inner_read_data_force(|file, len| {
                 let mut buf = vec![0u8; len];
                 file.read_exact(&mut buf).expect("Read array");
@@ -699,8 +699,7 @@ impl Hdu {
                 buf
             })),
             _ => panic!("Unexpected value for BITPIX"),
-        };
-        data
+        }
     }
 
     fn inner_read_data_force<F, T>(&self, read: F) -> FitsDataArray<T>
