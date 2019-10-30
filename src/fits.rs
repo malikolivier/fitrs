@@ -32,6 +32,7 @@ pub struct Fits {
 // }
 
 /// An iterator over [`Hdu`]s. Obtained from a consumed [`Fits`] object.
+#[derive(Debug)]
 pub struct FitsIntoIter {
     fits: Fits,
     position: u64,
@@ -40,6 +41,7 @@ pub struct FitsIntoIter {
 /// An iterator over references to [`Hdu`]s.
 ///
 /// Use caching to avoid rereading the same data from file.
+#[derive(Debug)]
 pub struct FitsIter<'f> {
     fits: &'f Fits,
     position: u64,
