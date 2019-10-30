@@ -1,11 +1,9 @@
 use std::fs::File;
 use std::io::{Error, Read, Seek, SeekFrom, Write};
-use std::ops::{Index, IndexMut};
 use std::path::Path;
 use std::result::Result;
 use std::slice;
 use std::str::{from_utf8, FromStr};
-use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
@@ -20,18 +18,18 @@ type FileRc = Arc<Mutex<File>>;
 #[derive(Debug)]
 pub struct Fits {
     file: FileRc,
-    hdus: Mutex<AtomicPtr<Vec<Hdu>>>,
+    hdus: RwLock<Vec<Hdu>>,
     total_hdu_count: RwLock<Option<usize>>,
 }
 
 /// We must release the Hdu cache!
-impl Drop for Fits {
-    fn drop(&mut self) {
-        use std::ptr;
-        let hdu_ptr = self.hdus.get_mut().unwrap().load(Ordering::SeqCst);
-        unsafe { ptr::drop_in_place(hdu_ptr) };
-    }
-}
+// impl Drop for Fits {
+//     fn drop(&mut self) {
+//         use std::ptr;
+//         let hdu_ptr = self.hdus.get_mut().unwrap().load(Ordering::SeqCst);
+//         unsafe { ptr::drop_in_place(hdu_ptr) };
+//     }
+// }
 
 /// An iterator over [`Hdu`]s. Obtained from a consumed [`Fits`] object.
 pub struct FitsIntoIter {
@@ -48,29 +46,20 @@ pub struct FitsIter<'f> {
     count: usize,
 }
 
-/// An iterator over mutable references to [`Hdu`]s.
-///
-/// Use caching to avoid rereading the same data from file.
-pub struct FitsIterMut<'f> {
-    fits: &'f mut Fits,
-    position: u64,
-    count: usize,
-}
-
 /// Represent an HDU as defined in [FITS standard 4.1](https://archive.stsci.edu/fits/fits_standard/node13.html#SECTION00810000000000000000).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Hdu {
     header: Vec<(HeaderKeyWord, Option<HeaderValueComment>)>,
     data_start: u64,
     file: Option<FileRc>,
-    /// Cache of data inside Hdu
-    data: RwLock<Option<FitsData>>,
+    /// Data inside Hdu (there if cached)
+    data: Option<FitsData>,
 }
 
 /// Represent a data array inside an [`Hdu`].
 ///
 /// Follows data representation as defined in [FITS standard 6](https://archive.stsci.edu/fits/fits_standard/node42.html#SECTION001000000000000000000).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum FitsData {
     Characters(FitsDataArray<char>),
     IntegersI32(FitsDataArray<Option<i32>>),
@@ -80,7 +69,7 @@ pub enum FitsData {
 }
 
 /// Actual array data inside the [`Hdu`]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FitsDataArray<T> {
     /// Shape of array.
     ///
@@ -168,7 +157,7 @@ impl FitsData {
 
 type HeaderKeyWord = String;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct HeaderValueComment {
     value: Option<HeaderValue>,
     comment: Option<HeaderComment>,
@@ -177,7 +166,7 @@ struct HeaderValueComment {
 /// Value stored inside the [`Hdu`] header.
 ///
 /// As defined in [FITS standard 5.2](https://archive.stsci.edu/fits/fits_standard/node30.html#SECTION00920000000000000000).
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum HeaderValue {
     CharacterString(String),
     Logical(bool),
@@ -197,7 +186,7 @@ impl Fits {
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Fits, Error> {
         File::open(path).map(|file| Fits {
             file: Arc::new(Mutex::new(file)),
-            hdus: Mutex::new(AtomicPtr::new(Box::into_raw(Box::new(Vec::new())))),
+            hdus: RwLock::new(Vec::new()),
             total_hdu_count: RwLock::new(None),
         })
     }
@@ -205,15 +194,6 @@ impl Fits {
     /// Iterate over references to [`Hdu`]s.
     pub fn iter(&self) -> FitsIter {
         FitsIter {
-            fits: self,
-            position: 0,
-            count: 0,
-        }
-    }
-
-    /// Iterate over mutable references to [`Hdu`]s.
-    pub fn iter_mut(&mut self) -> FitsIterMut {
-        FitsIterMut {
             fits: self,
             position: 0,
             count: 0,
@@ -229,8 +209,8 @@ impl Fits {
         }
     }
 
-    /// Get reference to [`Hdu`] by index. Use `0` for primary HDU.
-    pub fn get(&self, index: usize) -> Option<&Hdu> {
+    /// Get [`Hdu`] by index. Use `0` for primary HDU.
+    pub fn get(&self, index: usize) -> Option<Hdu> {
         for (i, hdu) in self.iter().enumerate() {
             if i == index {
                 return Some(hdu);
@@ -239,18 +219,18 @@ impl Fits {
         None
     }
 
-    /// Get mutable reference to [`Hdu`] by index. Use `0` for primary HDU.
-    pub fn get_mut(&mut self, index: usize) -> Option<&mut Hdu> {
-        for (i, hdu) in self.iter_mut().enumerate() {
-            if i == index {
-                return Some(hdu);
-            }
-        }
-        None
-    }
+    // /// Get mutable reference to [`Hdu`] by index. Use `0` for primary HDU.
+    // pub fn get_mut(&mut self, index: usize) -> Option<&mut Hdu> {
+    //     for (i, hdu) in self.iter_mut().enumerate() {
+    //         if i == index {
+    //             return Some(hdu);
+    //         }
+    //     }
+    //     None
+    // }
 
-    /// Get reference to [`Hdu`] by `EXTNAME`. Defined in [FIST standard 5.4.2.6](https://archive.stsci.edu/fits/fits_standard/node40.html#SECTION00942000000000000000)
-    pub fn get_by_name(&self, index: &str) -> Option<&Hdu> {
+    /// Get [`Hdu`] by `EXTNAME`. Defined in [FIST standard 5.4.2.6](https://archive.stsci.edu/fits/fits_standard/node40.html#SECTION00942000000000000000)
+    pub fn get_by_name(&self, index: &str) -> Option<Hdu> {
         let value = Some(HeaderValue::CharacterString(String::from(index)));
         for hdu in self.iter() {
             if hdu.value("EXTNAME") == value.as_ref() {
@@ -260,20 +240,20 @@ impl Fits {
         None
     }
 
-    /// Get mutable reference to [`Hdu`] by `EXTNAME`. Defined in [FIST standard 5.4.2.6](https://archive.stsci.edu/fits/fits_standard/node40.html#SECTION00942000000000000000)
-    pub fn get_mut_by_name(&mut self, index: &str) -> Option<&mut Hdu> {
-        let value = Some(HeaderValue::CharacterString(String::from(index)));
-        for hdu in self.iter_mut() {
-            if hdu.value("EXTNAME") == value.as_ref() {
-                return Some(hdu);
-            }
-        }
-        None
-    }
+    // /// Get mutable reference to [`Hdu`] by `EXTNAME`. Defined in [FIST standard 5.4.2.6](https://archive.stsci.edu/fits/fits_standard/node40.html#SECTION00942000000000000000)
+    // pub fn get_mut_by_name(&mut self, index: &str) -> Option<&mut Hdu> {
+    //     let value = Some(HeaderValue::CharacterString(String::from(index)));
+    //     for hdu in self.iter_mut() {
+    //         if hdu.value("EXTNAME") == value.as_ref() {
+    //             return Some(hdu);
+    //         }
+    //     }
+    //     None
+    // }
 
-    fn hdus_guard(&self) -> MutexGuard<AtomicPtr<Vec<Hdu>>> {
-        self.hdus.lock().unwrap()
-    }
+    // fn hdus_guard(&self) -> MutexGuard<AtomicPtr<Vec<Hdu>>> {
+    //     self.hdus.lock().unwrap()
+    // }
 }
 
 /// # Create a FITS file
@@ -292,7 +272,8 @@ impl Fits {
 
             Ok(Fits {
                 file: file_ptr,
-                hdus: Mutex::new(AtomicPtr::new(Box::into_raw(Box::new(vec![primary_hdu])))),
+                // hdus: Mutex::new(AtomicPtr::new(Box::into_raw(Box::new(vec![primary_hdu])))),
+                hdus: RwLock::new(vec![primary_hdu]),
                 total_hdu_count: RwLock::new(Some(1)),
             })
         })
@@ -302,8 +283,9 @@ impl Fits {
     ///
     /// Currently defaults to creating an IMAGE HDU.
     pub fn push(&mut self, mut hdu: Hdu) -> Result<(), Error> {
-        let hdu_guard = self.hdus_guard();
-        let hdus = unsafe { &mut *hdu_guard.load(Ordering::SeqCst) };
+        // let hdu_guard = self.hdus_guard();
+        // let hdus = unsafe { &mut *hdu_guard.load(Ordering::SeqCst) };
+        let hdus = self.hdus.get_mut().expect("Get lock");
         let last_hdu = &hdus[hdus.len() - 1];
 
         let mut header_len = last_hdu.header.len() as u64 * 80;
@@ -359,70 +341,6 @@ impl Fits {
 }
 
 ///
-impl Index<usize> for Fits {
-    /// [`Hdu`] at index.
-    type Output = Hdu;
-    /// Get [`Hdu`] by index. Panic if index is larger than the number of
-    /// [`Hdu`]s.
-    /// Prefer [`Fits::get`] if you need to check.
-    fn index(&self, index: usize) -> &Self::Output {
-        for (i, hdu) in self.iter().enumerate() {
-            if i == index {
-                return hdu;
-            }
-        }
-        panic!("Index out of range");
-    }
-}
-
-impl IndexMut<usize> for Fits {
-    /// Get mutable [`Hdu`] by index.
-    /// Panic if index is larger than the number of [`Hdu`]s.
-    /// Prefer [`Fits::get_mut`] if you need to check.
-    fn index_mut(&mut self, index: usize) -> &mut Hdu {
-        for (i, hdu) in self.iter_mut().enumerate() {
-            if i == index {
-                return hdu;
-            }
-        }
-        panic!("Index out of range");
-    }
-}
-
-///
-impl<'s> Index<&'s str> for Fits {
-    /// [`Hdu`] with provided `EXTNAME`.
-    type Output = Hdu;
-    /// Get [`Hdu`] by `EXTNAME`.
-    /// Panic if `EXTNAME` is not found.
-    /// Prefer [`Fits::get_by_name`] if you need to check.
-    fn index(&self, index: &str) -> &Self::Output {
-        let value = Some(HeaderValue::CharacterString(String::from(index)));
-        for hdu in self.iter() {
-            if hdu.value("EXTNAME") == value.as_ref() {
-                return hdu;
-            }
-        }
-        panic!("Extension not found!");
-    }
-}
-
-impl<'s> IndexMut<&'s str> for Fits {
-    /// Get mutable [`Hdu`] by `EXTNAME`.
-    /// Panic if `EXTNAME` is not found.
-    /// Prefer [`Fits::get_mut_by_name`] if you need to check.
-    fn index_mut(&mut self, index: &str) -> &mut Self::Output {
-        let value = Some(HeaderValue::CharacterString(String::from(index)));
-        for hdu in self.iter_mut() {
-            if hdu.value("EXTNAME") == value.as_ref() {
-                return hdu;
-            }
-        }
-        panic!("Extension not found!");
-    }
-}
-
-///
 impl IntoIterator for Fits {
     type Item = Hdu;
     type IntoIter = FitsIntoIter;
@@ -470,15 +388,6 @@ impl MovableCursor for FitsIntoIter {
 }
 
 impl<'f> MovableCursor for FitsIter<'f> {
-    fn file(&self) -> MutexGuard<File> {
-        self.fits.file.lock().expect("Get lock")
-    }
-    fn position(&self) -> u64 {
-        self.position
-    }
-}
-
-impl<'f> MovableCursor for FitsIterMut<'f> {
     fn file(&self) -> MutexGuard<File> {
         self.fits.file.lock().expect("Get lock")
     }
@@ -616,7 +525,7 @@ trait IterableOverHdu: MovableCursor {
             header,
             data_start: data_start_position,
             file: Some(self.file_rc().clone()),
-            data: RwLock::new(None),
+            data: None,
         };
         let len = hdu.data_byte_length().unwrap();
         let mut next_position = data_start_position + (len as u64);
@@ -640,57 +549,29 @@ impl IterableOverHdu for FitsIntoIter {
     }
 }
 
-impl<'f> IterableOverHdu for FitsIterMut<'f> {
-    fn file_rc(&self) -> &FileRc {
-        &self.fits.file
-    }
-}
-
 impl<'f> Iterator for FitsIter<'f> {
-    type Item = &'f Hdu;
-    fn next(&mut self) -> Option<&'f Hdu> {
+    type Item = Hdu;
+    fn next(&mut self) -> Option<Hdu> {
         if let Some(hdu_count) = *self.fits.total_hdu_count.read().unwrap() {
             if self.count >= hdu_count {
                 return None;
             }
         }
-        let hdu_guard = self.fits.hdus_guard();
-        let hdus = unsafe { &mut *hdu_guard.load(Ordering::SeqCst) };
-        if self.count < hdus.len() {
-            self.count += 1;
-            return Some(&hdus[self.count - 1]);
-        }
-        if let Some((hdu, next_position)) = self.read_next_hdu() {
-            self.count += 1;
-            self.position = next_position;
-            hdus.push(hdu);
-            hdus.last()
-        } else {
-            *self.fits.total_hdu_count.write().unwrap() = Some(self.count);
-            None
-        }
-    }
-}
-
-impl<'f> Iterator for FitsIterMut<'f> {
-    type Item = &'f mut Hdu;
-    fn next(&mut self) -> Option<&'f mut Hdu> {
-        if let Some(hdu_count) = *self.fits.total_hdu_count.read().unwrap() {
-            if self.count >= hdu_count {
-                return None;
+        {
+            let hdus = self.fits.hdus.read().expect("Get read lock");
+            // let hdu_guard = self.fits.hdus_guard();
+            // let hdus = unsafe { &mut *hdu_guard.load(Ordering::SeqCst) };
+            if self.count < hdus.len() {
+                self.count += 1;
+                return Some(hdus[self.count - 1].clone());
             }
         }
-        let hdu_guard = self.fits.hdus_guard();
-        let hdus = unsafe { &mut *hdu_guard.load(Ordering::SeqCst) };
-        if self.count < hdus.len() {
-            self.count += 1;
-            return Some(&mut hdus[self.count - 1]);
-        }
         if let Some((hdu, next_position)) = self.read_next_hdu() {
             self.count += 1;
             self.position = next_position;
-            hdus.push(hdu);
-            hdus.last_mut()
+            let mut hdus = self.fits.hdus.write().expect("Get write lock");
+            hdus.push(hdu.clone());
+            Some(hdu)
         } else {
             *self.fits.total_hdu_count.write().unwrap() = Some(self.count);
             None
@@ -759,33 +640,12 @@ impl Hdu {
         })
     }
 
-    fn is_data_cached(&self) -> bool {
-        self.data.read().unwrap().is_some()
-    }
-
-    fn data(&self) -> Option<&FitsData> {
-        if let Some(ref data) = *self.data.read().unwrap() {
-            let data = data as *const FitsData;
-            Some(unsafe { &*data })
-        } else {
-            None
-        }
-    }
-
     /// Get data array stored in the [`Hdu`].
-    pub fn read_data(&self) -> &FitsData {
-        if self.is_data_cached() {
-            self.data().unwrap()
-        } else {
-            self.read_data_force()
-        }
-    }
-
-    fn read_data_force(&self) -> &FitsData {
+    pub fn read_data(&self) -> FitsData {
         let bitpix = self
             .value_as_integer_number("BITPIX")
             .expect("BITPIX is present");
-        let data = match bitpix {
+        match bitpix {
             8 => FitsData::Characters(self.inner_read_data_force(|file, len| {
                 let mut buf = vec![0u8; len];
                 file.read_exact(&mut buf).expect("Read array");
@@ -835,12 +695,7 @@ impl Hdu {
                 buf
             })),
             _ => panic!("Unexpected value for BITPIX"),
-        };
-        let mut out = self.data.write().unwrap();
-        *out = Some(data);
-        // Release write-lock to be able to read and return back the data
-        drop(out);
-        self.data().unwrap()
+        }
     }
 
     fn inner_read_data_force<F, T>(&self, read: F) -> FitsDataArray<T>
@@ -941,7 +796,7 @@ impl Hdu {
             header,
             data_start: 0,
             file: None,
-            data: RwLock::new(Some(FitsDataType::new_fits_array(shape, data))),
+            data: Some(FitsDataType::new_fits_array(shape, data)),
         }
     }
 
@@ -971,7 +826,7 @@ impl Hdu {
             }
         }
 
-        if let Some(data) = self.data() {
+        if let Some(data) = &self.data {
             let raw = data.raw();
 
             file_lock.write_all(&raw)?;
@@ -1673,68 +1528,9 @@ mod tests {
     }
 
     #[test]
-    fn iterate_over_hdu_mut() {
-        let mut fits = Fits::open("tests/testprog.fit").unwrap();
-        let mut iter = fits.iter_mut();
-        let primary_hdu = iter.next().unwrap();
-        assert_eq!(primary_hdu.header[0].0, "SIMPLE");
-        let hdu2 = iter.next().unwrap();
-        assert_eq!(hdu2.header[0].0, "XTENSION");
-        assert_eq!(
-            hdu2.value("XTENSION").unwrap(),
-            &HeaderValue::CharacterString(String::from("BINTABLE"))
-        );
-        let hdu3 = iter.next().unwrap();
-        assert_eq!(hdu3.header[0].0, "XTENSION");
-        assert_eq!(
-            hdu3.value("XTENSION").unwrap(),
-            &HeaderValue::CharacterString(String::from("IMAGE"))
-        );
-    }
-
-    #[test]
-    fn iterate_over_hdu_mut_twice() {
-        let mut fits = Fits::open("tests/testprog.fit").unwrap();
-        {
-            let mut iter = fits.iter_mut();
-            let primary_hdu = iter.next().unwrap();
-            assert_eq!(primary_hdu.header[0].0, "SIMPLE");
-            let hdu2 = iter.next().unwrap();
-            assert_eq!(hdu2.header[0].0, "XTENSION");
-            assert_eq!(
-                hdu2.value("XTENSION").unwrap(),
-                &HeaderValue::CharacterString(String::from("BINTABLE"))
-            );
-            let hdu3 = iter.next().unwrap();
-            assert_eq!(hdu3.header[0].0, "XTENSION");
-            assert_eq!(
-                hdu3.value("XTENSION").unwrap(),
-                &HeaderValue::CharacterString(String::from("IMAGE"))
-            );
-        }
-        {
-            let mut iter = fits.iter_mut();
-            let primary_hdu = iter.next().unwrap();
-            assert_eq!(primary_hdu.header[0].0, "SIMPLE");
-            let hdu2 = iter.next().unwrap();
-            assert_eq!(hdu2.header[0].0, "XTENSION");
-            assert_eq!(
-                hdu2.value("XTENSION").unwrap(),
-                &HeaderValue::CharacterString(String::from("BINTABLE"))
-            );
-            let hdu3 = iter.next().unwrap();
-            assert_eq!(hdu3.header[0].0, "XTENSION");
-            assert_eq!(
-                hdu3.value("XTENSION").unwrap(),
-                &HeaderValue::CharacterString(String::from("IMAGE"))
-            );
-        }
-    }
-
-    #[test]
     fn index_over_fits() {
         let fits = Fits::open("tests/testprog.fit").unwrap();
-        let hdu2 = &fits[1];
+        let hdu2 = fits.get(1).unwrap();
         assert_eq!(hdu2.header[0].0, "XTENSION");
         assert_eq!(
             hdu2.value("XTENSION").unwrap(),
@@ -1746,13 +1542,13 @@ mod tests {
     #[should_panic]
     fn index_overflow_over_fits() {
         let fits = Fits::open("tests/testprog.fit").unwrap();
-        let _hdu2 = &fits[10];
+        let _hdu2 = fits.get(10).unwrap();
     }
 
     #[test]
     fn index_with_string_over_fits() {
         let fits = Fits::open("tests/testprog.fit").unwrap();
-        let hdu2 = &fits["Test-ASCII"];
+        let hdu2 = fits.get_by_name("Test-ASCII").unwrap();
         assert_eq!(hdu2.header[0].0, "XTENSION");
         assert_eq!(
             hdu2.value("XTENSION").unwrap(),
@@ -1764,7 +1560,7 @@ mod tests {
     #[should_panic]
     fn index_with_string_not_found_over_fits() {
         let fits = Fits::open("tests/testprog.fit").unwrap();
-        let _hdu2 = &fits["FOOBAR"];
+        let _hdu2 = fits.get_by_name("FOOBAR").unwrap();
     }
 
     #[test]
