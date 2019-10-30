@@ -13,11 +13,14 @@ fn read_second_hdu_array_from_n_threads() {
         '\u{0}', 'ÿ', 'ÿ', 'ÿ', 'ÿ', '\u{0}', '\u{0}', '\u{0}', '\u{0}', '\u{0}',
     ];
 
+    const THREAD_COUNT: usize = 10;
     let fits = Arc::new(Fits::open("tests/testprog.fit").unwrap());
-    let fits_arcs = (0..1000).map(|_| fits.clone());
+    let fits_arcs = (0..THREAD_COUNT).map(|_| fits.clone());
+    let mut panicked = vec![];
 
+    let mut children = Vec::with_capacity(THREAD_COUNT);
     for fits in fits_arcs {
-        thread::spawn(move || {
+        let child = thread::spawn(move || {
             let mut iter = fits.iter();
             iter.next();
             let table_hdu_1 = iter.next().unwrap();
@@ -29,5 +32,15 @@ fn read_second_hdu_array_from_n_threads() {
                 _ => panic!("Should be Characters!"),
             }
         });
+        children.push(child);
+    }
+
+    for (i, result) in children.into_iter().map(|child| child.join()).enumerate() {
+        if let Err(e) = result {
+            panicked.push((i, e));
+        }
+    }
+    if panicked.len() > 0 {
+        panic!("{} threads panicked: {:?}", panicked.len(), panicked);
     }
 }
