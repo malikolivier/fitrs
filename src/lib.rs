@@ -21,17 +21,18 @@
 //! }
 //!
 //! // Get HDU by ID
-//! let hdu_2 = &fits[2];
+//! let hdu_2 = fits.get(2);
 //! // Get HDU by EXTNAME
-//! let hdu_flux = &fits["FLUX"];
-//!
-//! match hdu_flux.read_data() {
-//!     &FitsData::FloatingPoint32(FitsDataArray { ref shape, ref data }) => {
-//!         println!("{:?}", shape);
-//!         println!("{:?}", data);
+//! if let Some(hdu_flux) = fits.get_by_name("FLUX") {
+//!     match hdu_flux.read_data() {
+//!         FitsData::FloatingPoint32(FitsDataArray { shape, data }) => {
+//!             println!("{:?}", shape);
+//!             println!("{:?}", data);
+//!         }
+//!         _ => { /* ... */ }
 //!     }
-//!     _ => { /* ... */ }
 //! }
+//!
 //! ```
 //!
 //! ## Write FITS
@@ -73,6 +74,6 @@ mod types;
 mod wcs;
 
 pub use fits::{Fits, FitsData, FitsDataArray, Hdu, HduIter, HeaderValue};
-pub use fits::{FitsIntoIter, FitsIter, FitsIterMut};
+pub use fits::{FitsIntoIter, FitsIter};
 pub use types::FitsDataType;
 pub use wcs::WCS;
