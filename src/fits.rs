@@ -53,6 +53,7 @@ pub struct FitsIter<'f> {
 pub struct Hdu {
     header: Vec<(HeaderKeyWord, Option<HeaderValueComment>)>,
     data_start: u64,
+    next_hdu_start: u64,
     file: Option<FileRc>,
     /// Data inside Hdu (there if cached)
     data: Option<FitsData>,
@@ -222,7 +223,7 @@ impl Fits {
     }
 
     // /// Get mutable reference to [`Hdu`] by index. Use `0` for primary HDU.
-    // pub fn get_mut(&mut self, index: usize) -> Option<&mut Hdu> {
+    // pub fn get_mut(&mut self,alloc index: usize) -> Option<&mut Hdu> {
     //     for (i, hdu) in self.iter_mut().enumerate() {
     //         if i == index {
     //             return Some(hdu);
@@ -401,8 +402,8 @@ impl<'f> MovableCursor for FitsIter<'f> {
 impl Iterator for FitsIntoIter {
     type Item = Hdu;
     fn next(&mut self) -> Option<Self::Item> {
-        self.read_next_hdu().map(|(hdu, next_position)| {
-            self.position = next_position;
+        self.read_next_hdu().map(|hdu| {
+            self.position = hdu.next_hdu_start;
             hdu
         })
     }
@@ -411,7 +412,7 @@ impl Iterator for FitsIntoIter {
 trait IterableOverHdu: MovableCursor {
     fn file_rc(&self) -> &FileRc;
 
-    fn read_next_hdu(&self) -> Option<(Hdu, u64)> {
+    fn read_next_hdu(&self) -> Option<Hdu> {
         let (header, data_start_position) = {
             #[derive(PartialEq)]
             enum HeaderParseState {
@@ -523,9 +524,10 @@ trait IterableOverHdu: MovableCursor {
             (header, data_start_position)
         };
         // Lock released
-        let hdu = Hdu {
+        let mut hdu = Hdu {
             header,
             data_start: data_start_position,
+            next_hdu_start: 0,
             file: Some(self.file_rc().clone()),
             data: None,
         };
@@ -535,7 +537,8 @@ trait IterableOverHdu: MovableCursor {
         while (next_position % (36 * 80)) != 0 {
             next_position += 1;
         }
-        Some((hdu, next_position))
+        hdu.next_hdu_start = next_position;
+        Some(hdu)
     }
 }
 
@@ -565,12 +568,14 @@ impl<'f> Iterator for FitsIter<'f> {
             // let hdus = unsafe { &mut *hdu_guard.load(Ordering::SeqCst) };
             if self.count < hdus.len() {
                 self.count += 1;
-                return Some(hdus[self.count - 1].clone());
+                let hdu = &hdus[self.count - 1];
+                self.position = hdu.next_hdu_start;
+                return Some(hdu.clone());
             }
         }
-        if let Some((hdu, next_position)) = self.read_next_hdu() {
+        if let Some(hdu) = self.read_next_hdu() {
             self.count += 1;
-            self.position = next_position;
+            self.position = hdu.next_hdu_start;
             let mut hdus = self.fits.hdus.write().expect("Get write lock");
             hdus.push(hdu.clone());
             Some(hdu)
@@ -797,6 +802,7 @@ impl Hdu {
         Hdu {
             header,
             data_start: 0,
+            next_hdu_start: 0,
             file: None,
             data: Some(FitsDataType::new_fits_array(shape, data)),
         }
