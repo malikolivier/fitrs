@@ -12,7 +12,7 @@ standard](https://archive.stsci.edu/fits/fits_standard/) are supported, but the
 basic features are there.
 
 The objective is to make a lib to manage FITS files in pure rust, with as few
-dependencies as possible, intelligent cache and multi-threading in mind.
+dependencies as possible multi-threading in mind.
 
 ## Documentation
 
