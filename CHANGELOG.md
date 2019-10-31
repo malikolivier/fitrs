@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [v0.5.0] - 2019-10-31
+
 ### Removed
 
 - Remove caching suport for data in HDU (support was buggy).
