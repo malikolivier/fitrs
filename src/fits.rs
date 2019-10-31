@@ -762,6 +762,7 @@ impl Hdu {
         Hdu {
             header,
             data_start: 0,
+            // next_hdu_start is still unset, but initialize at 0
             next_hdu_start: 0,
             file: None,
             data: Some(FitsDataType::new_fits_array(shape, data)),
@@ -806,6 +807,8 @@ impl Hdu {
                 file_lock.write_all(&padding_data)?;
             }
         }
+
+        self.next_hdu_start = tell(&mut *file_lock);
         Ok(())
     }
 
