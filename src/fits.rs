@@ -22,15 +22,6 @@ pub struct Fits {
     total_hdu_count: RwLock<Option<usize>>,
 }
 
-/// We must release the Hdu cache!
-// impl Drop for Fits {
-//     fn drop(&mut self) {
-//         use std::ptr;
-//         let hdu_ptr = self.hdus.get_mut().unwrap().load(Ordering::SeqCst);
-//         unsafe { ptr::drop_in_place(hdu_ptr) };
-//     }
-// }
-
 /// An iterator over [`Hdu`]s. Obtained from a consumed [`Fits`] object.
 #[derive(Debug)]
 pub struct FitsIntoIter {
@@ -222,16 +213,6 @@ impl Fits {
         None
     }
 
-    // /// Get mutable reference to [`Hdu`] by index. Use `0` for primary HDU.
-    // pub fn get_mut(&mut self,alloc index: usize) -> Option<&mut Hdu> {
-    //     for (i, hdu) in self.iter_mut().enumerate() {
-    //         if i == index {
-    //             return Some(hdu);
-    //         }
-    //     }
-    //     None
-    // }
-
     /// Get [`Hdu`] by `EXTNAME`. Defined in [FIST standard 5.4.2.6](https://archive.stsci.edu/fits/fits_standard/node40.html#SECTION00942000000000000000)
     pub fn get_by_name(&self, index: &str) -> Option<Hdu> {
         let value = Some(HeaderValue::CharacterString(String::from(index)));
@@ -242,21 +223,6 @@ impl Fits {
         }
         None
     }
-
-    // /// Get mutable reference to [`Hdu`] by `EXTNAME`. Defined in [FIST standard 5.4.2.6](https://archive.stsci.edu/fits/fits_standard/node40.html#SECTION00942000000000000000)
-    // pub fn get_mut_by_name(&mut self, index: &str) -> Option<&mut Hdu> {
-    //     let value = Some(HeaderValue::CharacterString(String::from(index)));
-    //     for hdu in self.iter_mut() {
-    //         if hdu.value("EXTNAME") == value.as_ref() {
-    //             return Some(hdu);
-    //         }
-    //     }
-    //     None
-    // }
-
-    // fn hdus_guard(&self) -> MutexGuard<AtomicPtr<Vec<Hdu>>> {
-    //     self.hdus.lock().unwrap()
-    // }
 }
 
 /// # Create a FITS file
@@ -275,7 +241,6 @@ impl Fits {
 
             Ok(Fits {
                 file: file_ptr,
-                // hdus: Mutex::new(AtomicPtr::new(Box::into_raw(Box::new(vec![primary_hdu])))),
                 hdus: RwLock::new(vec![primary_hdu]),
                 total_hdu_count: RwLock::new(Some(1)),
             })
@@ -286,8 +251,6 @@ impl Fits {
     ///
     /// Currently defaults to creating an IMAGE HDU.
     pub fn push(&mut self, mut hdu: Hdu) -> Result<(), Error> {
-        // let hdu_guard = self.hdus_guard();
-        // let hdus = unsafe { &mut *hdu_guard.load(Ordering::SeqCst) };
         let hdus = self.hdus.get_mut().expect("Get lock");
         let last_hdu = &hdus[hdus.len() - 1];
 
