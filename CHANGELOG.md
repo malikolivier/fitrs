@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Removed
+
+- Remove caching suport for data in HDU (support was buggy).
+  This causes API changes.
+
+### Fixed
+
+- Fix timing errors on multi-threaded read.
+
 ## [v0.4.2] - 2018-12-02
 
 ### Added
