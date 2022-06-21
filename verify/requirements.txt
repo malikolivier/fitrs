@@ -1,2 +1,2 @@
 astropy==3.0.4
-numpy==1.15.1
+numpy==1.22.0
