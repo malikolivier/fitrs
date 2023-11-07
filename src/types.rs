@@ -33,6 +33,19 @@ impl FitsDataType for i32 {
     }
 }
 
+impl FitsDataType for u16 {
+    fn new_fits_array(shape: &[usize], data: Vec<u16>) -> FitsData {
+        FitsData::IntegersU16(FitsDataArray {
+            shape: Vec::from(shape),
+            data: data.into_iter().map(Some).collect(),
+        })
+    }
+
+    fn bitpix() -> i32 {
+        16
+    }
+}
+
 impl FitsDataType for u32 {
     fn new_fits_array(shape: &[usize], data: Vec<u32>) -> FitsData {
         FitsData::IntegersU32(FitsDataArray {
@@ -45,6 +58,7 @@ impl FitsDataType for u32 {
         32
     }
 }
+
 impl FitsDataType for f32 {
     fn new_fits_array(shape: &[usize], data: Vec<f32>) -> FitsData {
         FitsData::FloatingPoint32(FitsDataArray {
@@ -57,6 +71,7 @@ impl FitsDataType for f32 {
         -32
     }
 }
+
 impl FitsDataType for f64 {
     fn new_fits_array(shape: &[usize], data: Vec<f64>) -> FitsData {
         FitsData::FloatingPoint64(FitsDataArray {
