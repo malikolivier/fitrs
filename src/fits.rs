@@ -56,6 +56,7 @@ pub struct Hdu {
 #[derive(Debug, Clone)]
 pub enum FitsData {
     Characters(FitsDataArray<char>),
+    IntegersU16(FitsDataArray<Option<u16>>),
     IntegersI32(FitsDataArray<Option<i32>>),
     IntegersU32(FitsDataArray<Option<u32>>),
     FloatingPoint32(FitsDataArray<f32>),
@@ -86,6 +87,20 @@ impl<T> FitsDataArray<T> {
 impl FitsDataArray<char> {
     fn raw(&self) -> Vec<u8> {
         unimplemented!("Cannot write Characters")
+    }
+}
+
+impl FitsDataArray<Option<u16>> {
+    fn raw(&self) -> Vec<u8> {
+        let mut data = Vec::with_capacity(2 * self.data.len());
+        for n in &self.data {
+            if let Some(n) = n {
+                data.write_u16::<BigEndian>(*n).unwrap();
+            } else {
+                unimplemented!("Missing value not implemented for unsigned 16-bit integer arrays!");
+            }
+        }
+        data
     }
 }
 
@@ -141,6 +156,7 @@ impl FitsData {
     fn raw(&self) -> Vec<u8> {
         match self {
             FitsData::Characters(chars) => chars.raw(),
+            FitsData::IntegersU16(arr) => arr.raw(),
             FitsData::IntegersI32(arr) => arr.raw(),
             FitsData::IntegersU32(arr) => arr.raw(),
             FitsData::FloatingPoint32(arr) => arr.raw(),
